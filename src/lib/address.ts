@@ -7,7 +7,7 @@ export function formatKhmerAddress(s: Partial<StudentRow>): string {
     s.districts?.name_km && `ស្រុក/ខណ្ឌ${s.districts.name_km}`,
     s.provinces?.name_km && `ខេត្ត/រាជធានី${s.provinces.name_km}`
   ].filter(Boolean) as string[];
-  const tail = parts.length ? parts.join(' ') : '';
+  const tail = parts.join(' ');
   return s.address ? (tail ? `${s.address}, ${tail}` : s.address) : tail;
 }
 

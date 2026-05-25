@@ -39,3 +39,7 @@ export function downloadBlob(blob: Blob, filename: string) {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
+
+export function slugify(s: string): string {
+  return encodeURIComponent(s.trim());
+}

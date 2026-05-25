@@ -1,24 +1,23 @@
 import { useRef } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Printer, Download, X } from 'lucide-react';
-import { ClassRow } from '../types';
-import { downloadBlob } from '../lib/utils';
+import { downloadBlob, slugify } from '../lib/utils';
 
 interface Props {
-  cls: ClassRow;
+  classroom: string;
   onClose: () => void;
 }
 
-export default function ClassQRCard({ cls, onClose }: Props) {
+export default function ClassQRCard({ classroom, onClose }: Props) {
   const svgRef = useRef<HTMLDivElement>(null);
-  const url = `${window.location.origin}/student?class=${cls.slug}`;
+  const url = `${window.location.origin}/student?class=${slugify(classroom)}`;
 
   function downloadSvg() {
     const svg = svgRef.current?.querySelector('svg');
     if (!svg) return;
     const data = new XMLSerializer().serializeToString(svg);
     const blob = new Blob([data], { type: 'image/svg+xml;charset=utf-8' });
-    downloadBlob(blob, `qr-${cls.name.replace(/\s+/g, '-')}.svg`);
+    downloadBlob(blob, `qr-${classroom.replace(/\s+/g, '-')}.svg`);
   }
 
   function printQR() {
@@ -26,15 +25,15 @@ export default function ClassQRCard({ cls, onClose }: Props) {
     if (!w) return;
     const svg = svgRef.current?.querySelector('svg')?.outerHTML || '';
     w.document.write(`
-      <!doctype html><html><head><title>QR — ${cls.name}</title>
+      <!doctype html><html><head><title>QR — ${classroom}</title>
       <style>
         body{font-family:'Kantumruy Pro',sans-serif;text-align:center;padding:40px}
-        h1{margin:0 0 8px;font-size:28px}
+        h1{margin:0 0 8px;font-size:32px}
         p{color:#475569;margin:0 0 24px}
         .qr{display:inline-block;padding:20px;border:2px solid #e2e8f0;border-radius:16px;background:white}
-        .url{margin-top:16px;font-size:12px;color:#64748b;word-break:break-all;max-width:400px}
+        .url{margin-top:16px;font-size:12px;color:#64748b;word-break:break-all;max-width:400px;margin-left:auto;margin-right:auto}
       </style></head><body>
-        <h1>ថ្នាក់ ${cls.name}</h1>
+        <h1>ថ្នាក់ ${classroom}</h1>
         <p>ស្កេនដើម្បីបំពេញព័ត៌មានសិស្ស</p>
         <div class="qr">${svg}</div>
         <div class="url">${url}</div>
@@ -49,7 +48,7 @@ export default function ClassQRCard({ cls, onClose }: Props) {
       <div className="card p-6 max-w-sm w-full" onClick={e => e.stopPropagation()}>
         <div className="flex items-start justify-between mb-4">
           <div>
-            <h3 className="font-bold text-lg">{cls.name}</h3>
+            <h3 className="font-bold text-lg">ថ្នាក់ {classroom}</h3>
             <p className="text-sm text-slate-500">QR Code សម្រាប់ថ្នាក់</p>
           </div>
           <button className="btn-ghost" onClick={onClose} aria-label="បិទ"><X size={20} /></button>

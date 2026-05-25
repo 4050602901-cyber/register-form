@@ -8,17 +8,18 @@ function colWidths(ws: XLSX.WorkSheet, widths: number[]) {
 
 function buildSheet(title: string, students: StudentRow[], module: ModuleType): XLSX.WorkSheet {
   const headers = module === 'id_card'
-    ? ['ល.រ', 'ថ្នាក់', 'ឈ្មោះសិស្ស', 'ភេទ', 'ថ្ងៃខែឆ្នាំកំណើត', 'អាយុ', 'លេខអត្តសញ្ញាណប័ណ្ណ', 'ទូរស័ព្ទ', 'ភូមិ', 'ឃុំ/សង្កាត់', 'ស្រុក/ខណ្ឌ', 'ខេត្ត/រាជធានី', 'ផ្ទះលេខ/ផ្លូវ', 'ស្ថានភាព', 'លទ្ធផល']
-    : ['ល.រ', 'ថ្នាក់', 'ឈ្មោះសិស្ស', 'ភេទ', 'ថ្ងៃខែឆ្នាំកំណើត', 'អាយុ', 'លេខអត្តសញ្ញាណប័ណ្ណ', 'ទូរស័ព្ទ', 'ភូមិ', 'ឃុំ/សង្កាត់', 'ស្រុក/ខណ្ឌ', 'ខេត្ត/រាជធានី', 'ផ្ទះលេខ/ផ្លូវ', 'ថ្ងៃចុះឈ្មោះចុងក្រោយ', 'លទ្ធផលចុះឈ្មោះ'];
+    ? ['ល.រ', 'លេខកូដ', 'ថ្នាក់', 'ឈ្មោះសិស្ស', 'ភេទ', 'ថ្ងៃខែឆ្នាំកំណើត', 'អាយុ', 'លេខអត្តសញ្ញាណប័ណ្ណ', 'ទូរស័ព្ទ', 'ភូមិ', 'ឃុំ/សង្កាត់', 'ស្រុក/ខណ្ឌ', 'ខេត្ត/រាជធានី', 'ផ្ទះលេខ/ផ្លូវ', 'ស្ថានភាព', 'លទ្ធផល']
+    : ['ល.រ', 'លេខកូដ', 'ថ្នាក់', 'ឈ្មោះសិស្ស', 'ភេទ', 'ថ្ងៃខែឆ្នាំកំណើត', 'អាយុ', 'លេខអត្តសញ្ញាណប័ណ្ណ', 'ទូរស័ព្ទ', 'ភូមិ', 'ឃុំ/សង្កាត់', 'ស្រុក/ខណ្ឌ', 'ខេត្ត/រាជធានី', 'ផ្ទះលេខ/ផ្លូវ', 'ថ្ងៃចុះឈ្មោះចុងក្រោយ', 'លទ្ធផលចុះឈ្មោះ'];
 
   const body = students.map((s, i) => {
     const common = [
-      s.no ?? i + 1,
-      s.classes?.name ?? '',
-      s.student_name,
+      i + 1,
+      s.student_code ?? '',
+      s.classroom ?? '',
+      s.name,
       s.gender ?? '',
-      s.date_of_birth ?? '',
-      ageText(s.date_of_birth),
+      s.dob ?? '',
+      ageText(s.dob),
       s.id_card_number ?? '',
       s.phone ?? '',
       s.villages?.name_km ?? '',
@@ -39,7 +40,7 @@ function buildSheet(title: string, students: StudentRow[], module: ModuleType): 
 
   const data = [[title], [summary], [], headers, ...body];
   const ws = XLSX.utils.aoa_to_sheet(data);
-  colWidths(ws, [6, 14, 28, 8, 16, 8, 18, 14, 14, 18, 18, 16, 24, 16, 18]);
+  colWidths(ws, [6, 14, 12, 28, 8, 16, 8, 18, 14, 14, 18, 18, 16, 24, 16, 18]);
   ws['!merges'] = [
     { s: { r: 0, c: 0 }, e: { r: 0, c: headers.length - 1 } },
     { s: { r: 1, c: 0 }, e: { r: 1, c: headers.length - 1 } }
@@ -58,7 +59,7 @@ export function exportStudentsExcel(students: StudentRow[], module: ModuleType) 
 
   const byClass = new Map<string, StudentRow[]>();
   students.forEach(s => {
-    const k = s.classes?.name || 'គ្មានថ្នាក់';
+    const k = s.classroom || 'គ្មានថ្នាក់';
     if (!byClass.has(k)) byClass.set(k, []);
     byClass.get(k)!.push(s);
   });
@@ -73,10 +74,10 @@ export function exportStudentsExcel(students: StudentRow[], module: ModuleType) 
 
 export function exportTemplate() {
   const wb = XLSX.utils.book_new();
-  const headers = ['ល.រ', 'ឈ្មោះសិស្ស', 'ភេទ', 'ថ្ងៃខែឆ្នាំកំណើត', 'លេខអត្តសញ្ញាណប័ណ្ណ', 'ទូរស័ព្ទ', 'ភូមិ', 'ឃុំ/សង្កាត់', 'ស្រុក/ខណ្ឌ', 'ខេត្ត/រាជធានី', 'ផ្ទះលេខ/ផ្លូវ', 'ស្ថានភាព', 'លទ្ធផល'];
-  const sample = [1, 'ឧទាហរណ៍ ស៊ីណា', 'ស្រី', '2008-05-15', '', '012345678', '', '', '', '', '', '', 'មិនទាន់បានធ្វើ'];
+  const headers = ['លេខកូដ', 'ឈ្មោះសិស្ស', 'ភេទ', 'ថ្ងៃខែឆ្នាំកំណើត', 'ថ្នាក់', 'លេខអត្តសញ្ញាណប័ណ្ណ', 'ទូរស័ព្ទ', 'ភូមិ', 'ឃុំ/សង្កាត់', 'ស្រុក/ខណ្ឌ', 'ខេត្ត/រាជធានី', 'ផ្ទះលេខ/ផ្លូវ', 'ស្ថានភាព', 'លទ្ធផល'];
+  const sample = ['', 'ឧទាហរណ៍ ស៊ីណា', 'ស្រី', '2008-05-15', '12A', '', '012345678', '', '', '', '', '', '', 'មិនទាន់បានធ្វើ'];
   const ws = XLSX.utils.aoa_to_sheet([headers, sample]);
-  colWidths(ws, [6, 28, 8, 16, 18, 14, 14, 18, 18, 16, 24, 14, 18]);
+  colWidths(ws, [14, 28, 8, 16, 12, 18, 14, 14, 18, 18, 16, 24, 14, 18]);
   XLSX.utils.book_append_sheet(wb, ws, 'Template');
   XLSX.writeFile(wb, 'Student-Import-Template.xlsx');
 }

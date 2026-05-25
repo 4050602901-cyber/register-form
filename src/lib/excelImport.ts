@@ -2,10 +2,11 @@ import * as XLSX from 'xlsx';
 import { supabase } from './supabase';
 
 type ImportedStudent = {
-  no?: number;
-  student_name: string;
-  gender?: 'ប្រុស' | 'ស្រី';
-  date_of_birth?: string;
+  student_code?: string;
+  name: string;
+  gender?: string;
+  dob?: string;
+  classroom?: string;
   id_card_number?: string;
   phone?: string;
   address?: string;
@@ -20,10 +21,11 @@ type ImportedStudent = {
 };
 
 const aliases: Record<keyof ImportedStudent, string[]> = {
-  no:                      ['no', 'ល.រ', 'លរ', 'លេខរៀង', 'លំដាប់'],
-  student_name:            ['student name', 'name', 'ឈ្មោះ', 'គោត្តនាមនិងនាម', 'នាមត្រកូលនិងនាមខ្លួន', 'សិស្ស'],
+  student_code:            ['student code', 'លេខកូដ', 'លេខកូដសិស្ស', 'studentcode'],
+  name:                    ['name', 'student name', 'ឈ្មោះ', 'គោត្តនាមនិងនាម', 'នាមត្រកូលនិងនាមខ្លួន', 'សិស្ស'],
   gender:                  ['gender', 'sex', 'ភេទ'],
-  date_of_birth:           ['date of birth', 'dob', 'ថ្ងៃខែឆ្នាំកំណើត', 'ថ្ងៃកំណើត'],
+  dob:                     ['dob', 'date of birth', 'ថ្ងៃខែឆ្នាំកំណើត', 'ថ្ងៃកំណើត'],
+  classroom:               ['classroom', 'class', 'ថ្នាក់', 'ថ្នាក់រៀន'],
   id_card_number:          ['id card number', 'idcard', 'អត្តសញ្ញាណប័ណ្ណ', 'លេខអត្តសញ្ញាណប័ណ្ណ', 'លេខអ.ខ'],
   phone:                   ['phone', 'tel', 'លេខទូរស័ព្ទ', 'ទូរស័ព្ទ'],
   address:                 ['address', 'អាសយដ្ឋាន', 'ផ្ទះលេខ', 'ទីលំនៅ'],
@@ -37,7 +39,8 @@ const aliases: Record<keyof ImportedStudent, string[]> = {
   final_registration_date: ['final registration date', 'ថ្ងៃចុងក្រោយ', 'កាលបរិច្ឆេទចុងក្រោយ', 'ថ្ងៃចុះឈ្មោះចុងក្រោយ']
 };
 
-const norm = (v: unknown): string => String(v ?? '').trim().toLowerCase().replace(/\s+/g, ' ').replace(/[.\-_/]/g, '');
+const norm = (v: unknown): string =>
+  String(v ?? '').trim().toLowerCase().replace(/\s+/g, ' ').replace(/[.\-_/]/g, '');
 
 function excelDate(v: unknown): string | undefined {
   if (v === null || v === undefined || v === '') return undefined;
@@ -66,14 +69,19 @@ function mapHeader(header: unknown): keyof ImportedStudent | undefined {
   return undefined;
 }
 
-type AddressMap = { provinces: Map<string, string>; districts: Map<string, string>; communes: Map<string, string>; villages: Map<string, string> };
+type AddressMap = {
+  provinces: Map<string, string>;
+  districts: Map<string, string>;
+  communes: Map<string, string>;
+  villages: Map<string, string>;
+};
 
 async function loadAddressMaps(): Promise<AddressMap> {
   const [p, d, c, v] = await Promise.all([
     supabase.from('provinces').select('id, name_km'),
-    supabase.from('districts').select('id, name_km, province_id'),
-    supabase.from('communes').select('id, name_km, district_id'),
-    supabase.from('villages').select('id, name_km, commune_id')
+    supabase.from('districts').select('id, name_km'),
+    supabase.from('communes').select('id, name_km'),
+    supabase.from('villages').select('id, name_km')
   ]);
   const toMap = (rows: { id: string; name_km: string }[] | null) => {
     const m = new Map<string, string>();
@@ -88,37 +96,40 @@ async function loadAddressMaps(): Promise<AddressMap> {
   };
 }
 
+function genStudentCode(): string {
+  return `R${Date.now().toString().slice(-7)}${Math.floor(Math.random() * 90 + 10)}`;
+}
+
 export interface ImportResult {
   total: number;
   inserted: number;
   errors: string[];
 }
 
-export async function importStudentsFromExcel(file: File, classId: string): Promise<ImportResult> {
+export async function importStudentsFromExcel(file: File, classroom: string): Promise<ImportResult> {
   const buf = await file.arrayBuffer();
   const wb = XLSX.read(buf, { type: 'array', cellDates: true });
   const ws = wb.Sheets[wb.SheetNames[0]];
   const rows: unknown[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
 
   const headerIndex = rows.findIndex(r => r.some(c => mapHeader(c)));
-  if (headerIndex < 0) throw new Error('រកមិនឃើញជួរចំណងជើងក្នុង Excel។ សូមធានាថាមានជួរឈ្មោះ ឬ Student Name');
+  if (headerIndex < 0) throw new Error('រកមិនឃើញជួរចំណងជើងក្នុង Excel។ សូមធានាថាមានជួរ "ឈ្មោះ"');
 
   const headers = rows[headerIndex];
   const mapped = headers.map(mapHeader);
-
-  const errors: string[] = [];
   const addr = await loadAddressMaps();
+  const errors: string[] = [];
 
   const records = rows.slice(headerIndex + 1).map((r, idx) => {
     const o: Partial<ImportedStudent> = {};
     mapped.forEach((key, i) => { if (key) (o as any)[key] = r[i]; });
     return { line: headerIndex + idx + 2, raw: o };
-  }).filter(x => String(x.raw.student_name ?? '').trim().length > 0);
+  }).filter(x => String(x.raw.name ?? '').trim().length > 0);
 
   const payload = records.map(({ line, raw }) => {
     const g = String(raw.gender ?? '').trim();
     const gender = g === 'ស្រី' || /female|^f$/i.test(g) ? 'ស្រី'
-      : g === 'ប្រុស' || /male|^m$/i.test(g) ? 'ប្រុស' : null;
+      : g === 'ប្រុស' || /male|^m$/i.test(g) ? 'ប្រុស' : '';
 
     const province_id = raw.province_name ? addr.provinces.get(String(raw.province_name).trim()) || null : null;
     const district_id = raw.district_name ? addr.districts.get(String(raw.district_name).trim()) || null : null;
@@ -129,11 +140,11 @@ export async function importStudentsFromExcel(file: File, classId: string): Prom
     if (raw.district_name && !district_id) errors.push(`បន្ទាត់ ${line}: រកមិនឃើញស្រុក "${raw.district_name}"`);
 
     return {
-      class_id: classId,
-      no: Number(raw.no) || null,
-      student_name: String(raw.student_name).trim(),
+      student_code: raw.student_code ? String(raw.student_code).trim() : genStudentCode(),
+      name: String(raw.name).trim(),
       gender,
-      date_of_birth: excelDate(raw.date_of_birth) || null,
+      dob: excelDate(raw.dob) || null,
+      classroom: raw.classroom ? String(raw.classroom).trim() : classroom,
       id_card_number: raw.id_card_number ? String(raw.id_card_number).trim() : null,
       phone: raw.phone ? String(raw.phone).trim() : null,
       address: raw.address ? String(raw.address).trim() : null,
@@ -144,7 +155,8 @@ export async function importStudentsFromExcel(file: File, classId: string): Prom
       real_status: raw.real_status ? String(raw.real_status).trim() : null,
       id_card_result: raw.id_card_result ? String(raw.id_card_result).trim() : undefined,
       voter_result: raw.voter_result ? String(raw.voter_result).trim() : undefined,
-      final_registration_date: excelDate(raw.final_registration_date) || null
+      final_registration_date: excelDate(raw.final_registration_date) || null,
+      status: 'active'
     };
   });
 
@@ -156,7 +168,7 @@ export async function importStudentsFromExcel(file: File, classId: string): Prom
     const chunk = payload.slice(i, i + chunkSize);
     const { error, count } = await supabase
       .from('students')
-      .upsert(chunk, { onConflict: 'class_id,student_name', count: 'exact' });
+      .upsert(chunk, { onConflict: 'student_code', count: 'exact' });
     if (error) {
       errors.push(`Batch ${i / chunkSize + 1}: ${error.message}`);
     } else {

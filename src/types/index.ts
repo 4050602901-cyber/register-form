@@ -1,5 +1,4 @@
 export type ModuleType = 'id_card' | 'voter';
-export type Gender = 'ប្រុស' | 'ស្រី';
 
 export interface AddressRow {
   id: string;
@@ -11,40 +10,44 @@ export interface AddressRow {
   commune_id?: string;
 }
 
-export interface ClassRow {
-  id: string;
-  name: string;
-  slug: string;
-  description?: string | null;
-  created_at?: string;
-  updated_at?: string;
-}
-
+/**
+ * Mirrors the `public.students` table (existing schema):
+ *   id, student_code, name, gender, dob, classroom, created_at, status
+ * Plus columns added by migration.sql:
+ *   phone, id_card_number, address, province_id, district_id, commune_id, village_id,
+ *   real_status, id_card_result, voter_result, final_registration_date,
+ *   updated_by_student, updated_at
+ */
 export interface StudentRow {
   id: string;
-  class_id: string;
-  no?: number | null;
-  student_name: string;
-  gender?: Gender | null;
-  date_of_birth?: string | null;
+  student_code: string;
+  name: string;
+  gender: string;
+  dob?: string | null;
+  classroom: string;
+  status?: string | null;
+  created_at?: string | null;
+
+  // Registration extension
+  phone?: string | null;
   id_card_number?: string | null;
   address?: string | null;
-  phone?: string | null;
+  province_id?: string | null;
+  district_id?: string | null;
+  commune_id?: string | null;
+  village_id?: string | null;
   real_status?: string | null;
   id_card_result?: string | null;
   voter_result?: string | null;
   final_registration_date?: string | null;
   updated_by_student?: boolean | null;
   updated_at?: string | null;
-  province_id?: string | null;
-  district_id?: string | null;
-  commune_id?: string | null;
-  village_id?: string | null;
+
+  // Joined relations
   provinces?: AddressRow | null;
   districts?: AddressRow | null;
   communes?: AddressRow | null;
   villages?: AddressRow | null;
-  classes?: ClassRow | null;
 }
 
 export const ID_CARD_RESULTS = [
@@ -59,4 +62,4 @@ export const VOTER_RESULTS = [
   'មិនទាន់ដល់អាយុត្រូវចុះ'
 ] as const;
 
-export const GENDERS: Gender[] = ['ប្រុស', 'ស្រី'];
+export const GENDERS = ['ប្រុស', 'ស្រី'] as const;

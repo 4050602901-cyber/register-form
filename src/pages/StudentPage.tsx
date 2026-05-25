@@ -2,16 +2,16 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Search, CheckCircle, Loader2, GraduationCap, ChevronLeft } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import {
-  ClassRow, StudentRow, ModuleType,
+  StudentRow, ModuleType,
   ID_CARD_RESULTS, VOTER_RESULTS, GENDERS
 } from '../types';
 import AddressSelect from '../components/AddressSelect';
 
-const STUDENT_SELECT = '*, classes(*), provinces(*), districts(*), communes(*), villages(*)';
+const STUDENT_SELECT = '*, provinces(*), districts(*), communes(*), villages(*)';
 
 export default function StudentPage() {
-  const [classes, setClasses] = useState<ClassRow[]>([]);
-  const [classId, setClassId] = useState('');
+  const [classrooms, setClassrooms] = useState<string[]>([]);
+  const [classroom, setClassroom] = useState('');
   const [students, setStudents] = useState<StudentRow[]>([]);
   const [q, setQ] = useState('');
   const [selected, setSelected] = useState<StudentRow | null>(null);
@@ -20,46 +20,53 @@ export default function StudentPage() {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // Load classes + read ?class=slug query param
+  // Load all classrooms (distinct) + handle ?class= query param
   useEffect(() => {
     (async () => {
-      const { data } = await supabase.from('classes').select('*').order('name');
-      const all = data || [];
-      setClasses(all);
-      const slug = new URLSearchParams(location.search).get('class');
-      if (slug) {
-        const match = all.find(c => c.slug === slug || c.id === slug);
-        if (match) setClassId(match.id);
+      const { data } = await supabase.from('students').select('classroom').not('classroom', 'is', null);
+      const set = new Set<string>();
+      (data || []).forEach((r: any) => { if (r.classroom) set.add(r.classroom); });
+      const list = Array.from(set).sort((a, b) => a.localeCompare(b, 'km'));
+      setClassrooms(list);
+      const param = new URLSearchParams(location.search).get('class');
+      if (param) {
+        const decoded = decodeURIComponent(param);
+        if (list.includes(decoded)) setClassroom(decoded);
       }
     })();
   }, []);
 
   useEffect(() => {
-    if (!classId) { setStudents([]); return; }
+    if (!classroom) { setStudents([]); return; }
     setLoading(true);
-    supabase.from('students').select(STUDENT_SELECT).eq('class_id', classId).order('no')
+    supabase
+      .from('students')
+      .select(STUDENT_SELECT)
+      .eq('classroom', classroom)
+      .order('name')
       .then(({ data }) => { setStudents(data || []); setLoading(false); });
-  }, [classId]);
+  }, [classroom]);
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
-    if (!term) return students.slice(0, 50);
-    return students.filter(s => s.student_name.toLowerCase().includes(term)).slice(0, 50);
+    if (!term) return students.slice(0, 60);
+    return students.filter(s => s.name.toLowerCase().includes(term) ||
+      (s.student_code || '').toLowerCase().includes(term)).slice(0, 60);
   }, [students, q]);
 
   const setField = <K extends keyof StudentRow>(k: K, v: StudentRow[K]) => {
     if (selected) setSelected({ ...selected, [k]: v });
   };
 
-  async function submit(e: FormEvent) {
-    e.preventDefault();
+  async function submit(e?: FormEvent) {
+    e?.preventDefault();
     if (!selected || saving) return;
     setSaving(true);
 
     const update: Partial<StudentRow> = {
-      student_name: selected.student_name,
+      name: selected.name,
       gender: selected.gender,
-      date_of_birth: selected.date_of_birth,
+      dob: selected.dob,
       id_card_number: selected.id_card_number,
       phone: selected.phone,
       address: selected.address,
@@ -109,17 +116,17 @@ export default function StudentPage() {
               </div>
               <div>
                 <label className="label">ជ្រើសថ្នាក់</label>
-                <select className="input" value={classId} onChange={e => setClassId(e.target.value)}>
+                <select className="input" value={classroom} onChange={e => setClassroom(e.target.value)}>
                   <option value="">-- ជ្រើសថ្នាក់ --</option>
-                  {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  {classrooms.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
             </div>
 
-            {classId && (
+            {classroom && (
               <>
                 <div>
-                  <label className="label">ស្វែងរកឈ្មោះ</label>
+                  <label className="label">ស្វែងរកឈ្មោះ ឬ លេខកូដ</label>
                   <div className="relative">
                     <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input
@@ -146,8 +153,8 @@ export default function StudentPage() {
                     >
                       <div className="flex items-center justify-between gap-2">
                         <div className="min-w-0">
-                          <p className="font-medium truncate">{s.no ?? '·'}. {s.student_name}</p>
-                          <p className="text-xs text-slate-500">{s.gender || '—'}</p>
+                          <p className="font-medium truncate">{s.name}</p>
+                          <p className="text-xs text-slate-500">{s.student_code} • {s.gender || '—'}</p>
                         </div>
                         {s.updated_by_student && (
                           <CheckCircle size={16} className="text-green-600 shrink-0" />
@@ -185,72 +192,43 @@ export default function StudentPage() {
         )}
 
         <form onSubmit={submit} className="card p-4 sm:p-5 space-y-4">
-          <h2 className="font-bold text-lg">បំពេញព័ត៌មាន — {selected.student_name}</h2>
+          <h2 className="font-bold text-lg">បំពេញព័ត៌មាន — {selected.name}</h2>
 
           <div className="grid sm:grid-cols-2 gap-3">
             <div className="sm:col-span-2">
               <label className="label">ឈ្មោះសិស្ស</label>
-              <input
-                className="input"
-                value={selected.student_name}
-                onChange={e => setField('student_name', e.target.value)}
-                required
-              />
+              <input className="input" value={selected.name} onChange={e => setField('name', e.target.value)} required />
             </div>
             <div>
               <label className="label">ភេទ</label>
-              <select className="input" value={selected.gender || ''} onChange={e => setField('gender', (e.target.value || null) as any)}>
+              <select className="input" value={selected.gender || ''} onChange={e => setField('gender', e.target.value)}>
                 <option value="">--</option>
                 {GENDERS.map(g => <option key={g}>{g}</option>)}
               </select>
             </div>
             <div>
               <label className="label">ថ្ងៃខែឆ្នាំកំណើត</label>
-              <input
-                type="date"
-                className="input"
-                value={selected.date_of_birth || ''}
-                onChange={e => setField('date_of_birth', e.target.value || null)}
-              />
+              <input type="date" className="input" value={selected.dob || ''} onChange={e => setField('dob', e.target.value || null)} />
             </div>
             <div>
               <label className="label">លេខអត្តសញ្ញាណប័ណ្ណ</label>
-              <input
-                className="input"
-                value={selected.id_card_number || ''}
-                onChange={e => setField('id_card_number', e.target.value || null)}
-                inputMode="numeric"
-              />
+              <input className="input" value={selected.id_card_number || ''} onChange={e => setField('id_card_number', e.target.value || null)} inputMode="numeric" />
             </div>
             <div>
               <label className="label">លេខទូរស័ព្ទ</label>
-              <input
-                className="input"
-                value={selected.phone || ''}
-                onChange={e => setField('phone', e.target.value || null)}
-                inputMode="tel"
-                placeholder="012 345 678"
-              />
+              <input className="input" value={selected.phone || ''} onChange={e => setField('phone', e.target.value || null)} inputMode="tel" placeholder="012 345 678" />
             </div>
             {module === 'voter' && (
               <div className="sm:col-span-2">
                 <label className="label">ថ្ងៃចុះឈ្មោះចុងក្រោយ</label>
-                <input
-                  type="date"
-                  className="input"
-                  value={selected.final_registration_date || ''}
-                  onChange={e => setField('final_registration_date', e.target.value || null)}
-                />
+                <input type="date" className="input" value={selected.final_registration_date || ''} onChange={e => setField('final_registration_date', e.target.value || null)} />
               </div>
             )}
           </div>
 
           <div>
             <label className="label font-semibold">អាសយដ្ឋានបច្ចុប្បន្ន</label>
-            <AddressSelect
-              value={selected}
-              onChange={p => setSelected({ ...selected, ...p })}
-            />
+            <AddressSelect value={selected} onChange={p => setSelected({ ...selected, ...p })} />
           </div>
 
           <div>
@@ -265,12 +243,11 @@ export default function StudentPage() {
           </div>
         </form>
 
-        {/* Sticky submit on mobile */}
         <div className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur border-t border-slate-200 p-3 sm:static sm:bg-transparent sm:border-0 sm:p-0 sm:mt-4">
           <div className="max-w-2xl mx-auto">
             <button
               type="button"
-              onClick={submit as any}
+              onClick={() => submit()}
               disabled={saving}
               className="btn-primary w-full text-base py-3"
             >

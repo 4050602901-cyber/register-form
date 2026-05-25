@@ -7,30 +7,29 @@ import {
 import { supabase } from '../lib/supabase';
 import { exportStudentsExcel, exportTemplate } from '../lib/excelExport';
 import { importStudentsFromExcel } from '../lib/excelImport';
-import { pct, ageText } from '../lib/utils';
+import { ageText } from '../lib/utils';
 import { shortAddress } from '../lib/address';
 import {
-  ClassRow, StudentRow, ModuleType,
+  StudentRow, ModuleType,
   ID_CARD_RESULTS, VOTER_RESULTS, GENDERS
 } from '../types';
 import Login from '../components/Login';
 import StatCard from '../components/StatCard';
-import ClassManager from '../components/ClassManager';
+import ClassroomList from '../components/ClassroomList';
 import AddressSelect from '../components/AddressSelect';
 
 const PAGE_SIZE = 50;
-const STUDENT_SELECT = '*, classes(*), provinces(*), districts(*), communes(*), villages(*)';
+const STUDENT_SELECT = '*, provinces(*), districts(*), communes(*), villages(*)';
 
 export default function AdminPage() {
   const [session, setSession] = useState<any>(null);
   const [authLoading, setAuthLoading] = useState(true);
 
-  const [classes, setClasses] = useState<ClassRow[]>([]);
   const [students, setStudents] = useState<StudentRow[]>([]);
   const [loading, setLoading] = useState(false);
 
   const [module, setModule] = useState<ModuleType>('id_card');
-  const [classId, setClassId] = useState('');
+  const [classroom, setClassroom] = useState('');
   const [gender, setGender] = useState('');
   const [result, setResult] = useState('');
   const [q, setQ] = useState('');
@@ -55,32 +54,41 @@ export default function AdminPage() {
 
   const loadStudents = useCallback(async () => {
     setLoading(true);
-    const { data } = await supabase.from('students').select(STUDENT_SELECT).order('no', { ascending: true });
+    const { data } = await supabase
+      .from('students')
+      .select(STUDENT_SELECT)
+      .order('classroom', { ascending: true })
+      .order('name', { ascending: true });
     setStudents(data || []);
     setLoading(false);
   }, []);
 
-  const loadClasses = useCallback(async () => {
-    const { data } = await supabase.from('classes').select('*').order('name');
-    setClasses(data || []);
-  }, []);
+  useEffect(() => { if (session) loadStudents(); }, [session, loadStudents]);
 
-  useEffect(() => { if (session) { loadClasses(); loadStudents(); } }, [session, loadClasses, loadStudents]);
+  const classrooms = useMemo(() => {
+    const set = new Set<string>();
+    students.forEach(s => { if (s.classroom) set.add(s.classroom); });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'km'));
+  }, [students]);
 
   const visible = useMemo(() => students.filter(s => {
-    if (classId && s.class_id !== classId) return false;
+    if (classroom && s.classroom !== classroom) return false;
     if (gender && s.gender !== gender) return false;
     if (result) {
       const r = module === 'id_card' ? s.id_card_result : s.voter_result;
       if (r !== result) return false;
     }
-    if (q && !s.student_name.toLowerCase().includes(q.toLowerCase())) return false;
+    if (q) {
+      const needle = q.toLowerCase();
+      if (!s.name.toLowerCase().includes(needle) &&
+          !(s.student_code || '').toLowerCase().includes(needle)) return false;
+    }
     return true;
-  }), [students, classId, gender, result, q, module]);
+  }), [students, classroom, gender, result, q, module]);
 
   const totalPages = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
   const pageRows = visible.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-  useEffect(() => { setPage(1); }, [classId, gender, result, q, module]);
+  useEffect(() => { setPage(1); }, [classroom, gender, result, q, module]);
 
   const stats = useMemo(() => {
     const total = visible.length;
@@ -111,7 +119,7 @@ export default function AdminPage() {
   async function saveEdit() {
     if (!edit) return;
     setSaving(true);
-    const { id, classes: _c, provinces: _p, districts: _d, communes: _cm, villages: _v, ...rest } = edit as any;
+    const { id, provinces: _p, districts: _d, communes: _cm, villages: _v, ...rest } = edit as any;
     const { error } = await supabase.from('students').update(rest).eq('id', id);
     setSaving(false);
     if (error) { alert(error.message); return; }
@@ -120,7 +128,7 @@ export default function AdminPage() {
   }
 
   async function removeStudent(s: StudentRow) {
-    if (!confirm(`លុបសិស្ស "${s.student_name}"?`)) return;
+    if (!confirm(`លុបសិស្ស "${s.name}"?`)) return;
     const { error } = await supabase.from('students').delete().eq('id', s.id);
     if (error) { alert(error.message); return; }
     await loadStudents();
@@ -133,7 +141,6 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen pb-24">
-      {/* Header */}
       <header className="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-slate-200">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
           <div className="min-w-0">
@@ -150,7 +157,6 @@ export default function AdminPage() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-4 space-y-4">
-        {/* Stats */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <StatCard title="សរុប" value={stats.total} icon={<Users size={20} />} tone="blue" />
           <StatCard title="ស្រី" value={stats.female} icon={<UserCheck size={20} />} tone="amber" />
@@ -158,9 +164,8 @@ export default function AdminPage() {
           <StatCard title="មិនទាន់" value={stats.pending} icon={<AlertTriangle size={20} />} tone="red" />
         </div>
 
-        {/* Class manager + Import */}
         <div className="grid lg:grid-cols-2 gap-4">
-          <ClassManager onChange={() => { loadClasses(); loadStudents(); }} />
+          <ClassroomList />
 
           <div className="card p-5 space-y-3">
             <div className="flex items-center justify-between">
@@ -169,10 +174,16 @@ export default function AdminPage() {
                 <FileSpreadsheet size={16} /> Template
               </button>
             </div>
-            <select className="input" value={importClass} onChange={e => setImportClass(e.target.value)}>
-              <option value="">-- ជ្រើសថ្នាក់ --</option>
-              {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
+            <input
+              className="input"
+              placeholder="ឈ្មោះថ្នាក់ (ឧ. 12A)"
+              value={importClass}
+              onChange={e => setImportClass(e.target.value)}
+              list="classroom-options"
+            />
+            <datalist id="classroom-options">
+              {classrooms.map(c => <option key={c} value={c} />)}
+            </datalist>
             <label className={`btn-primary cursor-pointer ${(!importClass || importing) ? 'opacity-50 pointer-events-none' : ''}`}>
               {importing ? <Loader2 className="animate-spin" size={18} /> : <Upload size={18} />}
               {importing ? 'កំពុងបញ្ចូល...' : 'ជ្រើស Excel'}
@@ -180,19 +191,18 @@ export default function AdminPage() {
             </label>
             {importMsg && <p className="text-sm text-slate-600 bg-slate-50 px-3 py-2 rounded-lg">{importMsg}</p>}
             <p className="text-xs text-slate-500">
-              ជួរទាមទារ: ឈ្មោះសិស្ស។ ជួរស្រេចចិត្ត: ភេទ, ថ្ងៃកំណើត, លេខអត្តសញ្ញាណប័ណ្ណ, ខេត្ត, ស្រុក, ឃុំ, ភូមិ
+              ជួរទាមទារ: ឈ្មោះ។ ជួរស្រេចចិត្ត: ភេទ, ថ្ងៃកំណើត, លេខអត្តសញ្ញាណប័ណ្ណ, ខេត្ត, ស្រុក, ឃុំ, ភូមិ, ថ្នាក់
             </p>
           </div>
         </div>
 
-        {/* Filters */}
         <div className="card p-4 space-y-3">
           <div className="flex items-center gap-2">
             <div className="relative flex-1">
               <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 className="input pl-10"
-                placeholder="ស្វែងរកឈ្មោះសិស្ស..."
+                placeholder="ស្វែងរកឈ្មោះ ឬ លេខកូដ..."
                 value={q}
                 onChange={e => setQ(e.target.value)}
               />
@@ -214,9 +224,9 @@ export default function AdminPage() {
               <option value="id_card">អត្តសញ្ញាណប័ណ្ណ</option>
               <option value="voter">ចុះឈ្មោះបោះឆ្នោត</option>
             </select>
-            <select className="input" value={classId} onChange={e => setClassId(e.target.value)}>
+            <select className="input" value={classroom} onChange={e => setClassroom(e.target.value)}>
               <option value="">គ្រប់ថ្នាក់</option>
-              {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              {classrooms.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
             <select className="input" value={gender} onChange={e => setGender(e.target.value)}>
               <option value="">គ្រប់ភេទ</option>
@@ -242,6 +252,7 @@ export default function AdminPage() {
             <table className="w-full min-w-[800px]">
               <thead><tr>
                 <th className="th">ល.រ</th>
+                <th className="th">លេខកូដ</th>
                 <th className="th">ឈ្មោះ</th>
                 <th className="th">ភេទ</th>
                 <th className="th">អាយុ</th>
@@ -252,19 +263,20 @@ export default function AdminPage() {
               </tr></thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={8} className="td text-center py-10"><Loader2 className="animate-spin inline" /></td></tr>
+                  <tr><td colSpan={9} className="td text-center py-10"><Loader2 className="animate-spin inline" /></td></tr>
                 ) : pageRows.length === 0 ? (
-                  <tr><td colSpan={8} className="td text-center py-10 text-slate-400">គ្មានទិន្នន័យ</td></tr>
+                  <tr><td colSpan={9} className="td text-center py-10 text-slate-400">គ្មានទិន្នន័យ</td></tr>
                 ) : pageRows.map((s, i) => {
                   const r = module === 'id_card' ? s.id_card_result : s.voter_result;
                   const done = r?.includes('រួច');
                   return (
                     <tr key={s.id} className="hover:bg-slate-50">
-                      <td className="td">{s.no ?? (page - 1) * PAGE_SIZE + i + 1}</td>
-                      <td className="td font-medium">{s.student_name}</td>
+                      <td className="td">{(page - 1) * PAGE_SIZE + i + 1}</td>
+                      <td className="td text-xs text-slate-500">{s.student_code}</td>
+                      <td className="td font-medium">{s.name}</td>
                       <td className="td">{s.gender || '—'}</td>
-                      <td className="td">{ageText(s.date_of_birth) || '—'}</td>
-                      <td className="td">{s.classes?.name || '—'}</td>
+                      <td className="td">{ageText(s.dob) || '—'}</td>
+                      <td className="td">{s.classroom || '—'}</td>
                       <td className="td max-w-[280px] truncate" title={shortAddress(s)}>{shortAddress(s) || '—'}</td>
                       <td className="td">
                         <span className={`chip ${done ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>{r || '—'}</span>
@@ -296,9 +308,9 @@ export default function AdminPage() {
               <div key={s.id} className="card p-4">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
-                    <p className="font-semibold truncate">{s.no ?? (page - 1) * PAGE_SIZE + i + 1}. {s.student_name}</p>
+                    <p className="font-semibold truncate">{(page - 1) * PAGE_SIZE + i + 1}. {s.name}</p>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      {s.gender || '—'} • {ageText(s.date_of_birth) || '—'} • {s.classes?.name || '—'}
+                      {s.student_code} • {s.gender || '—'} • {ageText(s.dob) || '—'} • {s.classroom || '—'}
                     </p>
                     {shortAddress(s) && (
                       <p className="text-xs text-slate-600 mt-1 line-clamp-2">{shortAddress(s)}</p>
@@ -315,7 +327,6 @@ export default function AdminPage() {
           })}
         </div>
 
-        {/* Pagination */}
         {totalPages > 1 && (
           <div className="flex items-center justify-center gap-2 pt-2">
             <button className="btn-soft" disabled={page === 1} onClick={() => setPage(p => p - 1)}>មុន</button>
@@ -325,17 +336,28 @@ export default function AdminPage() {
         )}
       </main>
 
-      {edit && <EditModal student={edit} module={module} saving={saving} onClose={() => setEdit(null)} onChange={setEdit} onSave={saveEdit} />}
+      {edit && (
+        <EditModal
+          student={edit}
+          module={module}
+          saving={saving}
+          classrooms={classrooms}
+          onClose={() => setEdit(null)}
+          onChange={setEdit}
+          onSave={saveEdit}
+        />
+      )}
     </div>
   );
 }
 
 function EditModal({
-  student, module, saving, onClose, onChange, onSave
+  student, module, saving, classrooms, onClose, onChange, onSave
 }: {
   student: StudentRow;
   module: ModuleType;
   saving: boolean;
+  classrooms: string[];
   onClose: () => void;
   onChange: (s: StudentRow) => void;
   onSave: () => void;
@@ -353,18 +375,29 @@ function EditModal({
           <div className="grid sm:grid-cols-2 gap-3">
             <div className="sm:col-span-2">
               <label className="label">ឈ្មោះសិស្ស</label>
-              <input className="input" value={student.student_name} onChange={e => set('student_name', e.target.value)} />
+              <input className="input" value={student.name} onChange={e => set('name', e.target.value)} />
+            </div>
+            <div>
+              <label className="label">លេខកូដសិស្ស</label>
+              <input className="input" value={student.student_code} onChange={e => set('student_code', e.target.value)} />
+            </div>
+            <div>
+              <label className="label">ថ្នាក់</label>
+              <input className="input" value={student.classroom || ''} onChange={e => set('classroom', e.target.value)} list="edit-classroom-options" />
+              <datalist id="edit-classroom-options">
+                {classrooms.map(c => <option key={c} value={c} />)}
+              </datalist>
             </div>
             <div>
               <label className="label">ភេទ</label>
-              <select className="input" value={student.gender || ''} onChange={e => set('gender', (e.target.value || null) as any)}>
+              <select className="input" value={student.gender || ''} onChange={e => set('gender', e.target.value)}>
                 <option value="">—</option>
                 {GENDERS.map(g => <option key={g}>{g}</option>)}
               </select>
             </div>
             <div>
               <label className="label">ថ្ងៃខែឆ្នាំកំណើត</label>
-              <input type="date" className="input" value={student.date_of_birth || ''} onChange={e => set('date_of_birth', e.target.value || null)} />
+              <input type="date" className="input" value={student.dob || ''} onChange={e => set('dob', e.target.value || null)} />
             </div>
             <div>
               <label className="label">លេខអត្តសញ្ញាណប័ណ្ណ</label>
@@ -381,10 +414,7 @@ function EditModal({
               </div>
             )}
             <div className="sm:col-span-2">
-              <AddressSelect
-                value={student}
-                onChange={p => onChange({ ...student, ...p })}
-              />
+              <AddressSelect value={student} onChange={p => onChange({ ...student, ...p })} />
             </div>
             <div className="sm:col-span-2">
               <label className="label">លទ្ធផល</label>
