@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Download, Upload, Users, UserCheck, AlertTriangle, CheckCircle } from 'lucide-react';
-import QRCode from 'qrcode.react';
+import { QRCodeSVG as QRCode } from 'qrcode.react';
 import { supabase } from '../lib/supabase';
 import { exportStudentsExcel } from '../lib/excelExport';
 import { importStudentsFromExcel } from '../lib/excelImport';
