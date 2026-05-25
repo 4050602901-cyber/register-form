@@ -8,6 +8,7 @@ import { supabase } from '../lib/supabase';
 import { exportStudentsExcel, exportTemplate } from '../lib/excelExport';
 import { importStudentsFromExcel } from '../lib/excelImport';
 import { ageText } from '../lib/utils';
+import { fetchAll } from '../lib/fetchAll';
 import { shortAddress } from '../lib/address';
 import {
   StudentRow, ModuleType,
@@ -54,13 +55,21 @@ export default function AdminPage() {
 
   const loadStudents = useCallback(async () => {
     setLoading(true);
-    const { data } = await supabase
-      .from('students')
-      .select(STUDENT_SELECT)
-      .order('classroom', { ascending: true })
-      .order('name', { ascending: true });
-    setStudents(data || []);
-    setLoading(false);
+    try {
+      const rows = await fetchAll<StudentRow>(([from, to]) =>
+        supabase
+          .from('students')
+          .select(STUDENT_SELECT)
+          .order('classroom', { ascending: true })
+          .order('name', { ascending: true })
+          .range(from, to)
+      );
+      setStudents(rows);
+    } catch (e: any) {
+      console.error('loadStudents:', e.message);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => { if (session) loadStudents(); }, [session, loadStudents]);

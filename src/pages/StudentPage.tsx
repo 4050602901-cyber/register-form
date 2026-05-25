@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Search, CheckCircle, Loader2, GraduationCap, ChevronLeft } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { fetchAll } from '../lib/fetchAll';
 import {
   StudentRow, ModuleType,
   ID_CARD_RESULTS, VOTER_RESULTS, GENDERS
@@ -23,9 +24,15 @@ export default function StudentPage() {
   // Load all classrooms (distinct) + handle ?class= query param
   useEffect(() => {
     (async () => {
-      const { data } = await supabase.from('students').select('classroom').not('classroom', 'is', null);
+      const data = await fetchAll<{ classroom: string }>(([from, to]) =>
+        supabase
+          .from('students')
+          .select('classroom')
+          .not('classroom', 'is', null)
+          .range(from, to)
+      );
       const set = new Set<string>();
-      (data || []).forEach((r: any) => { if (r.classroom) set.add(r.classroom); });
+      data.forEach(r => { if (r.classroom) set.add(r.classroom); });
       const list = Array.from(set).sort((a, b) => a.localeCompare(b, 'km'));
       setClassrooms(list);
       const param = new URLSearchParams(location.search).get('class');
@@ -39,12 +46,17 @@ export default function StudentPage() {
   useEffect(() => {
     if (!classroom) { setStudents([]); return; }
     setLoading(true);
-    supabase
-      .from('students')
-      .select(STUDENT_SELECT)
-      .eq('classroom', classroom)
-      .order('name')
-      .then(({ data }) => { setStudents(data || []); setLoading(false); });
+    fetchAll<StudentRow>(([from, to]) =>
+      supabase
+        .from('students')
+        .select(STUDENT_SELECT)
+        .eq('classroom', classroom)
+        .order('name')
+        .range(from, to)
+    ).then(rows => {
+      setStudents(rows);
+      setLoading(false);
+    }).catch(() => setLoading(false));
   }, [classroom]);
 
   const filtered = useMemo(() => {

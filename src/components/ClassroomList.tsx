@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { QrCode, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { fetchAll } from '../lib/fetchAll';
 import ClassQRCard from './ClassQRCard';
 
 interface ClassroomStat {
@@ -16,18 +17,27 @@ export default function ClassroomList() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const { data } = await supabase.from('students').select('classroom').not('classroom', 'is', null);
-      if (cancelled) return;
-      const map = new Map<string, number>();
-      (data || []).forEach((r: any) => {
-        if (!r.classroom) return;
-        map.set(r.classroom, (map.get(r.classroom) ?? 0) + 1);
-      });
-      const list: ClassroomStat[] = Array.from(map.entries())
-        .map(([classroom, count]) => ({ classroom, count }))
-        .sort((a, b) => a.classroom.localeCompare(b.classroom, 'km'));
-      setRows(list);
-      setLoading(false);
+      try {
+        const data = await fetchAll<{ classroom: string }>(([from, to]) =>
+          supabase
+            .from('students')
+            .select('classroom')
+            .not('classroom', 'is', null)
+            .range(from, to)
+        );
+        if (cancelled) return;
+        const map = new Map<string, number>();
+        data.forEach(r => {
+          if (!r.classroom) return;
+          map.set(r.classroom, (map.get(r.classroom) ?? 0) + 1);
+        });
+        const list: ClassroomStat[] = Array.from(map.entries())
+          .map(([classroom, count]) => ({ classroom, count }))
+          .sort((a, b) => a.classroom.localeCompare(b.classroom, 'km'));
+        setRows(list);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     })();
     return () => { cancelled = true; };
   }, []);

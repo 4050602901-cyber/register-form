@@ -76,24 +76,36 @@ type AddressMap = {
   villages: Map<string, string>;
 };
 
-async function loadAddressMaps(): Promise<AddressMap> {
-  const [p, d, c, v] = await Promise.all([
-    supabase.from('provinces').select('id, name_km'),
-    supabase.from('districts').select('id, name_km'),
-    supabase.from('communes').select('id, name_km'),
-    supabase.from('villages').select('id, name_km')
-  ]);
-  const toMap = (rows: { id: string; name_km: string }[] | null) => {
+/**
+ * Build name → id maps for ONLY the address names that appear in the
+ * imported rows. Avoids loading 14,372 villages on Supabase free tier.
+ */
+async function loadAddressMapsForNames(
+  names: { p: Set<string>; d: Set<string>; c: Set<string>; v: Set<string> }
+): Promise<AddressMap> {
+  const lookup = async (table: string, set: Set<string>) => {
     const m = new Map<string, string>();
-    (rows || []).forEach(r => m.set(r.name_km.trim(), r.id));
+    if (set.size === 0) return m;
+    const list = Array.from(set);
+    const BATCH = 200;
+    for (let i = 0; i < list.length; i += BATCH) {
+      const chunk = list.slice(i, i + BATCH);
+      const { data, error } = await supabase
+        .from(table)
+        .select('id, name_km')
+        .in('name_km', chunk);
+      if (error) throw error;
+      (data || []).forEach((r: any) => m.set(String(r.name_km).trim(), r.id));
+    }
     return m;
   };
-  return {
-    provinces: toMap(p.data),
-    districts: toMap(d.data),
-    communes: toMap(c.data),
-    villages: toMap(v.data)
-  };
+  const [provinces, districts, communes, villages] = await Promise.all([
+    lookup('provinces', names.p),
+    lookup('districts', names.d),
+    lookup('communes',  names.c),
+    lookup('villages',  names.v)
+  ]);
+  return { provinces, districts, communes, villages };
 }
 
 function genStudentCode(): string {
@@ -117,7 +129,6 @@ export async function importStudentsFromExcel(file: File, classroom: string): Pr
 
   const headers = rows[headerIndex];
   const mapped = headers.map(mapHeader);
-  const addr = await loadAddressMaps();
   const errors: string[] = [];
 
   const records = rows.slice(headerIndex + 1).map((r, idx) => {
@@ -125,6 +136,16 @@ export async function importStudentsFromExcel(file: File, classroom: string): Pr
     mapped.forEach((key, i) => { if (key) (o as any)[key] = r[i]; });
     return { line: headerIndex + idx + 2, raw: o };
   }).filter(x => String(x.raw.name ?? '').trim().length > 0);
+
+  // Collect only the address names that actually appear, then look them up
+  const names = { p: new Set<string>(), d: new Set<string>(), c: new Set<string>(), v: new Set<string>() };
+  records.forEach(({ raw }) => {
+    if (raw.province_name) names.p.add(String(raw.province_name).trim());
+    if (raw.district_name) names.d.add(String(raw.district_name).trim());
+    if (raw.commune_name)  names.c.add(String(raw.commune_name).trim());
+    if (raw.village_name)  names.v.add(String(raw.village_name).trim());
+  });
+  const addr = await loadAddressMapsForNames(names);
 
   const payload = records.map(({ line, raw }) => {
     const g = String(raw.gender ?? '').trim();
