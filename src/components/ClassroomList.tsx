@@ -3,6 +3,7 @@ import { QrCode, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { fetchAll } from '../lib/fetchAll';
 import ClassQRCard from './ClassQRCard';
+import BulkClassroomQR from './BulkClassroomQR';
 
 interface ClassroomStat {
   classroom: string;
@@ -44,9 +45,12 @@ export default function ClassroomList() {
 
   return (
     <div className="card p-5">
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="font-bold text-lg">ថ្នាក់រៀន</h2>
-        <span className="text-sm text-slate-500">{rows.length} ថ្នាក់</span>
+      <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
+        <div className="flex items-baseline gap-2">
+          <h2 className="font-bold text-lg">ថ្នាក់រៀន</h2>
+          <span className="text-sm text-slate-500">{rows.length} ថ្នាក់</span>
+        </div>
+        {rows.length > 0 && <BulkClassroomQR />}
       </div>
 
       {loading ? (

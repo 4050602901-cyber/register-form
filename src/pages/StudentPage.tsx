@@ -13,6 +13,7 @@ const STUDENT_SELECT = '*, provinces(*), districts(*), communes(*), villages(*)'
 export default function StudentPage() {
   const [classrooms, setClassrooms] = useState<string[]>([]);
   const [classroom, setClassroom] = useState('');
+  const [classroomLocked, setClassroomLocked] = useState(false);
   const [students, setStudents] = useState<StudentRow[]>([]);
   const [q, setQ] = useState('');
   const [selected, setSelected] = useState<StudentRow | null>(null);
@@ -21,7 +22,9 @@ export default function StudentPage() {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // Load all classrooms (distinct) + handle ?class= query param
+  // Load all classrooms (distinct) + handle ?class= query param.
+  // If a class is encoded in the URL (came from a per-classroom QR), lock it
+  // so the student cannot switch to a different classroom.
   useEffect(() => {
     (async () => {
       const data = await fetchAll<{ classroom: string }>(([from, to]) =>
@@ -38,7 +41,10 @@ export default function StudentPage() {
       const param = new URLSearchParams(location.search).get('class');
       if (param) {
         const decoded = decodeURIComponent(param);
-        if (list.includes(decoded)) setClassroom(decoded);
+        if (list.includes(decoded)) {
+          setClassroom(decoded);
+          setClassroomLocked(true);
+        }
       }
     })();
   }, []);
@@ -127,11 +133,18 @@ export default function StudentPage() {
                 </select>
               </div>
               <div>
-                <label className="label">ជ្រើសថ្នាក់</label>
-                <select className="input" value={classroom} onChange={e => setClassroom(e.target.value)}>
-                  <option value="">-- ជ្រើសថ្នាក់ --</option>
-                  {classrooms.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
+                <label className="label">{classroomLocked ? 'ថ្នាក់' : 'ជ្រើសថ្នាក់'}</label>
+                {classroomLocked ? (
+                  <div className="input bg-blue-50 border-blue-200 font-semibold text-blue-900 flex items-center gap-2">
+                    <GraduationCap size={18} />
+                    {classroom}
+                  </div>
+                ) : (
+                  <select className="input" value={classroom} onChange={e => setClassroom(e.target.value)}>
+                    <option value="">-- ជ្រើសថ្នាក់ --</option>
+                    {classrooms.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                )}
               </div>
             </div>
 
