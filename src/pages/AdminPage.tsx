@@ -1,24 +1,411 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Download, Upload, Users, UserCheck, AlertTriangle, CheckCircle } from 'lucide-react';
-import { QRCodeSVG as QRCode } from 'qrcode.react';
+import { ChangeEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  Users, UserCheck, CheckCircle, AlertTriangle,
+  Download, Upload, Search, Filter, LogOut, Loader2,
+  Pencil, X, FileSpreadsheet
+} from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { exportStudentsExcel } from '../lib/excelExport';
+import { exportStudentsExcel, exportTemplate } from '../lib/excelExport';
 import { importStudentsFromExcel } from '../lib/excelImport';
-import { pct } from '../lib/utils';
-import { ClassRow, ID_CARD_RESULTS, ModuleType, StudentRow, VOTER_RESULTS } from '../types';
+import { pct, ageText } from '../lib/utils';
+import { shortAddress } from '../lib/address';
+import {
+  ClassRow, StudentRow, ModuleType,
+  ID_CARD_RESULTS, VOTER_RESULTS, GENDERS
+} from '../types';
 import Login from '../components/Login';
 import StatCard from '../components/StatCard';
 import ClassManager from '../components/ClassManager';
 import AddressSelect from '../components/AddressSelect';
 
-export default function AdminPage(){
-  const [session,setSession]=useState<any>(null),[classes,setClasses]=useState<ClassRow[]>([]),[students,setStudents]=useState<StudentRow[]>([]),[module,setModule]=useState<ModuleType>('id_card'),[classId,setClassId]=useState(''),[gender,setGender]=useState(''),[result,setResult]=useState(''),[q,setQ]=useState(''),[edit,setEdit]=useState<StudentRow|null>(null),[importClass,setImportClass]=useState('');
-  async function load(){const {data:c}=await supabase.from('classes').select('*').order('name');setClasses(c||[]);const {data:s}=await supabase.from('students').select('*, classes(*), provinces(*), districts(*), communes(*), villages(*)').order('no');setStudents(s||[])}
-  useEffect(()=>{supabase.auth.getSession().then(({data})=>setSession(data.session)); const {data:{subscription}}=supabase.auth.onAuthStateChange((_e,s)=>setSession(s)); return()=>subscription.unsubscribe()},[]);
-  useEffect(()=>{if(session)load()},[session]);
-  const visible=useMemo(()=>students.filter(s=>(!classId||s.class_id===classId)&&(!gender||s.gender===gender)&&(!result||(module==='id_card'?s.id_card_result:s.voter_result)===result)&&(!q||s.student_name.includes(q))),[students,classId,gender,result,q,module]);
-  const completed=visible.filter(s=>(module==='id_card'?s.id_card_result:s.voter_result)?.includes('រួច')).length; const female=visible.filter(s=>s.gender==='ស្រី').length; const under=visible.filter(s=>(module==='id_card'?s.id_card_result:s.voter_result)?.includes('មិនទាន់ដល់អាយុ')).length;
-  async function doImport(file?:File){if(!file||!importClass)return alert('សូមជ្រើសថ្នាក់ និង Excel file'); const n=await importStudentsFromExcel(file,importClass); alert(`បាននាំចូល ${n} នាក់`); load();}
-  async function saveEdit(){if(!edit)return; const {classes:_,...payload}=edit as any; await supabase.from('students').update(payload).eq('id',edit.id); setEdit(null); load();}
-  if(!session)return <Login/>;
-  return <div className="min-h-screen p-4 md:p-6"><div className="max-w-7xl mx-auto space-y-5"><div className="flex flex-col md:flex-row md:items-center justify-between gap-3"><div><h1 className="text-3xl font-bold">ផ្ទាំងគ្រប់គ្រងទិន្នន័យសិស្ស</h1><p className="text-slate-500">Import Excel • គ្រប់គ្រងថ្នាក់ • Export របាយការណ៍</p></div><div className="flex gap-2"><a href="/student" target="_blank" className="btn-soft">Student Page</a><button className="btn-soft" onClick={()=>supabase.auth.signOut()}>ចាកចេញ</button></div></div><div className="grid md:grid-cols-5 gap-4"><StatCard title="សរុប" value={visible.length} icon={<Users/>}/><StatCard title="ស្រី" value={female} icon={<UserCheck/>}/><StatCard title="បានបញ្ចប់" value={completed} icon={<CheckCircle/>}/><StatCard title="មិនទាន់" value={visible.length-completed} icon={<AlertTriangle/>}/><StatCard title="ភាគរយ" value={pct(completed,visible.length)}/></div><div className="grid lg:grid-cols-3 gap-4"><ClassManager onChange={load}/><div className="card p-5 space-y-3"><h2 className="font-bold text-lg">នាំចូល Excel</h2><select className="input" value={importClass} onChange={e=>setImportClass(e.target.value)}><option value="">-- ជ្រើសថ្នាក់ --</option>{classes.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select><label className="btn-primary inline-flex items-center gap-2 cursor-pointer"><Upload size={18}/> ជ្រើស Excel<input type="file" hidden accept=".xlsx,.xls" onChange={e=>doImport(e.target.files?.[0])}/></label></div><div className="card p-5 space-y-3"><h2 className="font-bold text-lg">QR Code សម្រាប់សិស្ស</h2><QRCode value={`${location.origin}/student`} size={128}/><p className="text-sm text-slate-500 break-all">{location.origin}/student</p></div></div><div className="card p-5 space-y-3"><div className="grid md:grid-cols-6 gap-2"><select className="input" value={module} onChange={e=>setModule(e.target.value as ModuleType)}><option value="id_card">អត្តសញ្ញាណប័ណ្ណ</option><option value="voter">ចុះឈ្មោះបោះឆ្នោត</option></select><select className="input" value={classId} onChange={e=>setClassId(e.target.value)}><option value="">គ្រប់ថ្នាក់</option>{classes.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select><select className="input" value={gender} onChange={e=>setGender(e.target.value)}><option value="">គ្រប់ភេទ</option><option>ប្រុស</option><option>ស្រី</option></select><select className="input" value={result} onChange={e=>setResult(e.target.value)}><option value="">គ្រប់លទ្ធផល</option>{(module==='id_card'?ID_CARD_RESULTS:VOTER_RESULTS).map(x=><option key={x}>{x}</option>)}</select><input className="input" placeholder="ស្វែងរកឈ្មោះ" value={q} onChange={e=>setQ(e.target.value)}/><button onClick={()=>exportStudentsExcel(visible,module)} className="btn-primary flex items-center gap-2 justify-center"><Download size={18}/> Export</button></div><div className="overflow-auto"><table className="w-full min-w-[900px]"><thead><tr><th className="th">ល.រ</th><th className="th">ថ្នាក់</th><th className="th">ឈ្មោះ</th><th className="th">ភេទ</th><th className="th">ថ្ងៃកំណើត</th><th className="th">ID Card</th><th className="th">អាសយដ្ឋាន</th><th className="th">លទ្ធផល</th><th className="th">Action</th></tr></thead><tbody>{visible.map(s=><tr key={s.id}><td className="td">{s.no}</td><td className="td">{s.classes?.name}</td><td className="td font-medium">{s.student_name}</td><td className="td">{s.gender}</td><td className="td">{s.date_of_birth}</td><td className="td">{s.id_card_number}</td><td className="td">{s.address}</td><td className="td">{module==='id_card'?s.id_card_result:s.voter_result}</td><td className="td"><button onClick={()=>setEdit(s)} className="text-blue-600">កែ</button></td></tr>)}</tbody></table></div></div>{edit&&<div className="fixed inset-0 bg-black/40 grid place-items-center p-4"><div className="card p-5 max-w-xl w-full grid grid-cols-2 gap-3"><h2 className="font-bold text-xl col-span-2">កែព័ត៌មានសិស្ស</h2><input className="input" value={edit.student_name} onChange={e=>setEdit({...edit,student_name:e.target.value})}/><select className="input" value={edit.gender||''} onChange={e=>setEdit({...edit,gender:e.target.value as any})}><option></option><option>ប្រុស</option><option>ស្រី</option></select><input type="date" className="input" value={edit.date_of_birth||''} onChange={e=>setEdit({...edit,date_of_birth:e.target.value})}/><input className="input" placeholder="ID" value={edit.id_card_number||''} onChange={e=>setEdit({...edit,id_card_number:e.target.value})}/><input className="input col-span-2" placeholder="អាសយដ្ឋាន" value={edit.address||''} onChange={e=>setEdit({...edit,address:e.target.value})}/><select className="input col-span-2" value={(module==='id_card'?edit.id_card_result:edit.voter_result)||''} onChange={e=>setEdit({...edit,[module==='id_card'?'id_card_result':'voter_result']:e.target.value})}>{(module==='id_card'?ID_CARD_RESULTS:VOTER_RESULTS).map(x=><option key={x}>{x}</option>)}</select><button onClick={()=>setEdit(null)} className="btn-soft">បោះបង់</button><button onClick={saveEdit} className="btn-primary">រក្សាទុក</button></div></div>}</div></div>}
+const PAGE_SIZE = 50;
+const STUDENT_SELECT = '*, classes(*), provinces(*), districts(*), communes(*), villages(*)';
+
+export default function AdminPage() {
+  const [session, setSession] = useState<any>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+
+  const [classes, setClasses] = useState<ClassRow[]>([]);
+  const [students, setStudents] = useState<StudentRow[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const [module, setModule] = useState<ModuleType>('id_card');
+  const [classId, setClassId] = useState('');
+  const [gender, setGender] = useState('');
+  const [result, setResult] = useState('');
+  const [q, setQ] = useState('');
+  const [page, setPage] = useState(1);
+  const [showFilters, setShowFilters] = useState(false);
+
+  const [importClass, setImportClass] = useState('');
+  const [importing, setImporting] = useState(false);
+  const [importMsg, setImportMsg] = useState('');
+
+  const [edit, setEdit] = useState<StudentRow | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+      setAuthLoading(false);
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((_, s) => setSession(s));
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
+  const loadStudents = useCallback(async () => {
+    setLoading(true);
+    const { data } = await supabase.from('students').select(STUDENT_SELECT).order('no', { ascending: true });
+    setStudents(data || []);
+    setLoading(false);
+  }, []);
+
+  const loadClasses = useCallback(async () => {
+    const { data } = await supabase.from('classes').select('*').order('name');
+    setClasses(data || []);
+  }, []);
+
+  useEffect(() => { if (session) { loadClasses(); loadStudents(); } }, [session, loadClasses, loadStudents]);
+
+  const visible = useMemo(() => students.filter(s => {
+    if (classId && s.class_id !== classId) return false;
+    if (gender && s.gender !== gender) return false;
+    if (result) {
+      const r = module === 'id_card' ? s.id_card_result : s.voter_result;
+      if (r !== result) return false;
+    }
+    if (q && !s.student_name.toLowerCase().includes(q.toLowerCase())) return false;
+    return true;
+  }), [students, classId, gender, result, q, module]);
+
+  const totalPages = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
+  const pageRows = visible.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  useEffect(() => { setPage(1); }, [classId, gender, result, q, module]);
+
+  const stats = useMemo(() => {
+    const total = visible.length;
+    const female = visible.filter(s => s.gender === 'ស្រី').length;
+    const completed = visible.filter(s =>
+      (module === 'id_card' ? s.id_card_result : s.voter_result)?.includes('រួច')
+    ).length;
+    return { total, female, completed, pending: total - completed };
+  }, [visible, module]);
+
+  async function handleImport(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !importClass) { alert('សូមជ្រើសថ្នាក់ជាមុនសិន'); return; }
+    setImporting(true);
+    setImportMsg('');
+    try {
+      const r = await importStudentsFromExcel(file, importClass);
+      setImportMsg(`បានបញ្ចូល ${r.inserted}/${r.total} សិស្ស${r.errors.length ? ` (${r.errors.length} កំហុស)` : ''} ✅`);
+      await loadStudents();
+    } catch (err: any) {
+      setImportMsg(`បរាជ័យ: ${err.message}`);
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  async function saveEdit() {
+    if (!edit) return;
+    setSaving(true);
+    const { id, classes: _c, provinces: _p, districts: _d, communes: _cm, villages: _v, ...rest } = edit as any;
+    const { error } = await supabase.from('students').update(rest).eq('id', id);
+    setSaving(false);
+    if (error) { alert(error.message); return; }
+    setEdit(null);
+    await loadStudents();
+  }
+
+  async function removeStudent(s: StudentRow) {
+    if (!confirm(`លុបសិស្ស "${s.student_name}"?`)) return;
+    const { error } = await supabase.from('students').delete().eq('id', s.id);
+    if (error) { alert(error.message); return; }
+    await loadStudents();
+  }
+
+  if (authLoading) {
+    return <div className="min-h-screen grid place-items-center"><Loader2 className="animate-spin text-blue-600" size={32} /></div>;
+  }
+  if (!session) return <Login />;
+
+  return (
+    <div className="min-h-screen pb-24">
+      {/* Header */}
+      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-slate-200">
+        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-lg sm:text-xl font-bold truncate">ផ្ទាំងគ្រប់គ្រងសិស្ស</h1>
+            <p className="text-xs text-slate-500 hidden sm:block">បញ្ចូល • តាមដាន • របាយការណ៍</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <a href="/student" target="_blank" rel="noreferrer" className="btn-soft text-sm hidden sm:inline-flex">បើកទម្រង់</a>
+            <button className="btn-ghost text-slate-600" onClick={() => supabase.auth.signOut()} aria-label="ចាកចេញ">
+              <LogOut size={18} />
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-7xl mx-auto px-4 py-4 space-y-4">
+        {/* Stats */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <StatCard title="សរុប" value={stats.total} icon={<Users size={20} />} tone="blue" />
+          <StatCard title="ស្រី" value={stats.female} icon={<UserCheck size={20} />} tone="amber" />
+          <StatCard title="បានធ្វើរួច" value={stats.completed} icon={<CheckCircle size={20} />} tone="green" />
+          <StatCard title="មិនទាន់" value={stats.pending} icon={<AlertTriangle size={20} />} tone="red" />
+        </div>
+
+        {/* Class manager + Import */}
+        <div className="grid lg:grid-cols-2 gap-4">
+          <ClassManager onChange={() => { loadClasses(); loadStudents(); }} />
+
+          <div className="card p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="font-bold text-lg">នាំចូល Excel</h2>
+              <button className="btn-ghost text-blue-600 text-sm" onClick={exportTemplate}>
+                <FileSpreadsheet size={16} /> Template
+              </button>
+            </div>
+            <select className="input" value={importClass} onChange={e => setImportClass(e.target.value)}>
+              <option value="">-- ជ្រើសថ្នាក់ --</option>
+              {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+            <label className={`btn-primary cursor-pointer ${(!importClass || importing) ? 'opacity-50 pointer-events-none' : ''}`}>
+              {importing ? <Loader2 className="animate-spin" size={18} /> : <Upload size={18} />}
+              {importing ? 'កំពុងបញ្ចូល...' : 'ជ្រើស Excel'}
+              <input type="file" hidden accept=".xlsx,.xls" onChange={handleImport} />
+            </label>
+            {importMsg && <p className="text-sm text-slate-600 bg-slate-50 px-3 py-2 rounded-lg">{importMsg}</p>}
+            <p className="text-xs text-slate-500">
+              ជួរទាមទារ: ឈ្មោះសិស្ស។ ជួរស្រេចចិត្ត: ភេទ, ថ្ងៃកំណើត, លេខអត្តសញ្ញាណប័ណ្ណ, ខេត្ត, ស្រុក, ឃុំ, ភូមិ
+            </p>
+          </div>
+        </div>
+
+        {/* Filters */}
+        <div className="card p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                className="input pl-10"
+                placeholder="ស្វែងរកឈ្មោះសិស្ស..."
+                value={q}
+                onChange={e => setQ(e.target.value)}
+              />
+            </div>
+            <button className="btn-soft sm:hidden" onClick={() => setShowFilters(s => !s)}>
+              <Filter size={18} />
+            </button>
+            <button
+              className="btn-primary hidden sm:inline-flex"
+              onClick={() => exportStudentsExcel(visible, module)}
+              disabled={!visible.length}
+            >
+              <Download size={18} /> Export
+            </button>
+          </div>
+
+          <div className={`grid grid-cols-2 lg:grid-cols-4 gap-2 ${showFilters ? '' : 'hidden sm:grid'}`}>
+            <select className="input" value={module} onChange={e => setModule(e.target.value as ModuleType)}>
+              <option value="id_card">អត្តសញ្ញាណប័ណ្ណ</option>
+              <option value="voter">ចុះឈ្មោះបោះឆ្នោត</option>
+            </select>
+            <select className="input" value={classId} onChange={e => setClassId(e.target.value)}>
+              <option value="">គ្រប់ថ្នាក់</option>
+              {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+            <select className="input" value={gender} onChange={e => setGender(e.target.value)}>
+              <option value="">គ្រប់ភេទ</option>
+              {GENDERS.map(g => <option key={g}>{g}</option>)}
+            </select>
+            <select className="input" value={result} onChange={e => setResult(e.target.value)}>
+              <option value="">គ្រប់លទ្ធផល</option>
+              {(module === 'id_card' ? ID_CARD_RESULTS : VOTER_RESULTS).map(x => <option key={x}>{x}</option>)}
+            </select>
+          </div>
+          <button
+            className="btn-primary w-full sm:hidden"
+            onClick={() => exportStudentsExcel(visible, module)}
+            disabled={!visible.length}
+          >
+            <Download size={18} /> Export ({visible.length})
+          </button>
+        </div>
+
+        {/* Table — desktop */}
+        <div className="card overflow-hidden hidden md:block">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[800px]">
+              <thead><tr>
+                <th className="th">ល.រ</th>
+                <th className="th">ឈ្មោះ</th>
+                <th className="th">ភេទ</th>
+                <th className="th">អាយុ</th>
+                <th className="th">ថ្នាក់</th>
+                <th className="th">អាសយដ្ឋាន</th>
+                <th className="th">លទ្ធផល</th>
+                <th className="th"></th>
+              </tr></thead>
+              <tbody>
+                {loading ? (
+                  <tr><td colSpan={8} className="td text-center py-10"><Loader2 className="animate-spin inline" /></td></tr>
+                ) : pageRows.length === 0 ? (
+                  <tr><td colSpan={8} className="td text-center py-10 text-slate-400">គ្មានទិន្នន័យ</td></tr>
+                ) : pageRows.map((s, i) => {
+                  const r = module === 'id_card' ? s.id_card_result : s.voter_result;
+                  const done = r?.includes('រួច');
+                  return (
+                    <tr key={s.id} className="hover:bg-slate-50">
+                      <td className="td">{s.no ?? (page - 1) * PAGE_SIZE + i + 1}</td>
+                      <td className="td font-medium">{s.student_name}</td>
+                      <td className="td">{s.gender || '—'}</td>
+                      <td className="td">{ageText(s.date_of_birth) || '—'}</td>
+                      <td className="td">{s.classes?.name || '—'}</td>
+                      <td className="td max-w-[280px] truncate" title={shortAddress(s)}>{shortAddress(s) || '—'}</td>
+                      <td className="td">
+                        <span className={`chip ${done ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>{r || '—'}</span>
+                      </td>
+                      <td className="td">
+                        <div className="flex gap-1">
+                          <button className="btn-ghost text-blue-600" onClick={() => setEdit(s)} aria-label="កែ"><Pencil size={16} /></button>
+                          <button className="btn-ghost text-red-600" onClick={() => removeStudent(s)} aria-label="លុប"><X size={16} /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Cards — mobile */}
+        <div className="md:hidden space-y-2">
+          {loading ? (
+            <div className="card p-6 text-center"><Loader2 className="animate-spin inline text-blue-600" /></div>
+          ) : pageRows.length === 0 ? (
+            <div className="card p-6 text-center text-slate-400">គ្មានទិន្នន័យ</div>
+          ) : pageRows.map((s, i) => {
+            const r = module === 'id_card' ? s.id_card_result : s.voter_result;
+            const done = r?.includes('រួច');
+            return (
+              <div key={s.id} className="card p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold truncate">{s.no ?? (page - 1) * PAGE_SIZE + i + 1}. {s.student_name}</p>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {s.gender || '—'} • {ageText(s.date_of_birth) || '—'} • {s.classes?.name || '—'}
+                    </p>
+                    {shortAddress(s) && (
+                      <p className="text-xs text-slate-600 mt-1 line-clamp-2">{shortAddress(s)}</p>
+                    )}
+                    <span className={`chip mt-2 ${done ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>{r || '—'}</span>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <button className="btn-ghost text-blue-600" onClick={() => setEdit(s)}><Pencil size={16} /></button>
+                    <button className="btn-ghost text-red-600" onClick={() => removeStudent(s)}><X size={16} /></button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-center gap-2 pt-2">
+            <button className="btn-soft" disabled={page === 1} onClick={() => setPage(p => p - 1)}>មុន</button>
+            <span className="text-sm text-slate-600">ទំព័រ {page} / {totalPages}</span>
+            <button className="btn-soft" disabled={page === totalPages} onClick={() => setPage(p => p + 1)}>បន្ទាប់</button>
+          </div>
+        )}
+      </main>
+
+      {edit && <EditModal student={edit} module={module} saving={saving} onClose={() => setEdit(null)} onChange={setEdit} onSave={saveEdit} />}
+    </div>
+  );
+}
+
+function EditModal({
+  student, module, saving, onClose, onChange, onSave
+}: {
+  student: StudentRow;
+  module: ModuleType;
+  saving: boolean;
+  onClose: () => void;
+  onChange: (s: StudentRow) => void;
+  onSave: () => void;
+}) {
+  const set = <K extends keyof StudentRow>(k: K, v: StudentRow[K]) => onChange({ ...student, [k]: v });
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 overflow-y-auto" onClick={onClose}>
+      <div className="min-h-full grid place-items-center p-4">
+        <div className="card p-5 max-w-2xl w-full space-y-4" onClick={e => e.stopPropagation()}>
+          <div className="flex items-center justify-between">
+            <h2 className="font-bold text-xl">កែព័ត៌មានសិស្ស</h2>
+            <button className="btn-ghost" onClick={onClose}><X size={20} /></button>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-3">
+            <div className="sm:col-span-2">
+              <label className="label">ឈ្មោះសិស្ស</label>
+              <input className="input" value={student.student_name} onChange={e => set('student_name', e.target.value)} />
+            </div>
+            <div>
+              <label className="label">ភេទ</label>
+              <select className="input" value={student.gender || ''} onChange={e => set('gender', (e.target.value || null) as any)}>
+                <option value="">—</option>
+                {GENDERS.map(g => <option key={g}>{g}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="label">ថ្ងៃខែឆ្នាំកំណើត</label>
+              <input type="date" className="input" value={student.date_of_birth || ''} onChange={e => set('date_of_birth', e.target.value || null)} />
+            </div>
+            <div>
+              <label className="label">លេខអត្តសញ្ញាណប័ណ្ណ</label>
+              <input className="input" value={student.id_card_number || ''} onChange={e => set('id_card_number', e.target.value || null)} />
+            </div>
+            <div>
+              <label className="label">ទូរស័ព្ទ</label>
+              <input className="input" value={student.phone || ''} onChange={e => set('phone', e.target.value || null)} />
+            </div>
+            {module === 'voter' && (
+              <div className="sm:col-span-2">
+                <label className="label">ថ្ងៃចុះឈ្មោះចុងក្រោយ</label>
+                <input type="date" className="input" value={student.final_registration_date || ''} onChange={e => set('final_registration_date', e.target.value || null)} />
+              </div>
+            )}
+            <div className="sm:col-span-2">
+              <AddressSelect
+                value={student}
+                onChange={p => onChange({ ...student, ...p })}
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="label">លទ្ធផល</label>
+              <select
+                className="input"
+                value={(module === 'id_card' ? student.id_card_result : student.voter_result) || ''}
+                onChange={e => set(module === 'id_card' ? 'id_card_result' : 'voter_result', e.target.value)}
+              >
+                {(module === 'id_card' ? ID_CARD_RESULTS : VOTER_RESULTS).map(x => <option key={x}>{x}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="flex gap-2 pt-2">
+            <button className="btn-soft flex-1" onClick={onClose}>បោះបង់</button>
+            <button className="btn-primary flex-1" onClick={onSave} disabled={saving}>
+              {saving ? <Loader2 className="animate-spin" size={18} /> : null}
+              រក្សាទុក
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -1,58 +1,168 @@
 import * as XLSX from 'xlsx';
 import { supabase } from './supabase';
 
-type ImportedStudent = { no?: number; student_name: string; gender?: string; date_of_birth?: string; id_card_number?: string; address?: string; real_status?: string; id_card_result?: string; voter_result?: string; final_registration_date?: string };
-
-const aliases: Record<string, string[]> = {
-  no: ['no','ល.រ','លរ','លេខរៀង','លំដាប់'],
-  student_name: ['student name','name','ឈ្មោះ','គោត្តនាមនិងនាម','នាមត្រកូល និងនាមខ្លួន','សិស្ស'],
-  gender: ['gender','ភេទ'],
-  date_of_birth: ['date of birth','dob','ថ្ងៃខែឆ្នាំកំណើត','ថ្ងៃកំណើត'],
-  id_card_number: ['id card number','អត្តសញ្ញាណប័ណ្ណ','លេខអត្តសញ្ញាណប័ណ្ណ','លេខអ.ខ'],
-  address: ['address','អាសយដ្ឋាន','ទីលំនៅ'],
-  real_status: ['status','ស្ថានភាព','real_status'],
-  id_card_result: ['result','លទ្ធផល','id_card_result'],
-  voter_result: ['voter_result','លទ្ធផលចុះឈ្មោះ'],
-  final_registration_date: ['final registration date','ថ្ងៃចុងក្រោយ','កាលបរិច្ឆេទចុងក្រោយ']
+type ImportedStudent = {
+  no?: number;
+  student_name: string;
+  gender?: 'ប្រុស' | 'ស្រី';
+  date_of_birth?: string;
+  id_card_number?: string;
+  phone?: string;
+  address?: string;
+  province_name?: string;
+  district_name?: string;
+  commune_name?: string;
+  village_name?: string;
+  real_status?: string;
+  id_card_result?: string;
+  voter_result?: string;
+  final_registration_date?: string;
 };
-const norm = (v:any) => String(v ?? '').trim().toLowerCase().replace(/\s+/g,' ');
-function excelDate(v:any){
-  if (!v) return undefined;
-  if (v instanceof Date) return v.toISOString().slice(0,10);
-  if (typeof v === 'number') { const d = XLSX.SSF.parse_date_code(v); return d ? `${d.y}-${String(d.m).padStart(2,'0')}-${String(d.d).padStart(2,'0')}` : undefined; }
-  const dt = new Date(v); return Number.isNaN(dt.getTime()) ? String(v) : dt.toISOString().slice(0,10);
+
+const aliases: Record<keyof ImportedStudent, string[]> = {
+  no:                      ['no', 'ល.រ', 'លរ', 'លេខរៀង', 'លំដាប់'],
+  student_name:            ['student name', 'name', 'ឈ្មោះ', 'គោត្តនាមនិងនាម', 'នាមត្រកូលនិងនាមខ្លួន', 'សិស្ស'],
+  gender:                  ['gender', 'sex', 'ភេទ'],
+  date_of_birth:           ['date of birth', 'dob', 'ថ្ងៃខែឆ្នាំកំណើត', 'ថ្ងៃកំណើត'],
+  id_card_number:          ['id card number', 'idcard', 'អត្តសញ្ញាណប័ណ្ណ', 'លេខអត្តសញ្ញាណប័ណ្ណ', 'លេខអ.ខ'],
+  phone:                   ['phone', 'tel', 'លេខទូរស័ព្ទ', 'ទូរស័ព្ទ'],
+  address:                 ['address', 'អាសយដ្ឋាន', 'ផ្ទះលេខ', 'ទីលំនៅ'],
+  province_name:           ['province', 'ខេត្ត', 'រាជធានី', 'ខេត្តរាជធានី'],
+  district_name:           ['district', 'ស្រុក', 'ខណ្ឌ', 'ស្រុកខណ្ឌ'],
+  commune_name:            ['commune', 'ឃុំ', 'សង្កាត់', 'ឃុំសង្កាត់'],
+  village_name:            ['village', 'ភូមិ'],
+  real_status:             ['status', 'ស្ថានភាព', 'real_status'],
+  id_card_result:          ['result', 'លទ្ធផល', 'id_card_result', 'លទ្ធផលអត្តសញ្ញាណប័ណ្ណ'],
+  voter_result:            ['voter_result', 'លទ្ធផលចុះឈ្មោះ', 'ការចុះឈ្មោះ'],
+  final_registration_date: ['final registration date', 'ថ្ងៃចុងក្រោយ', 'កាលបរិច្ឆេទចុងក្រោយ', 'ថ្ងៃចុះឈ្មោះចុងក្រោយ']
+};
+
+const norm = (v: unknown): string => String(v ?? '').trim().toLowerCase().replace(/\s+/g, ' ').replace(/[.\-_/]/g, '');
+
+function excelDate(v: unknown): string | undefined {
+  if (v === null || v === undefined || v === '') return undefined;
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  if (typeof v === 'number') {
+    const d = XLSX.SSF.parse_date_code(v);
+    return d ? `${d.y}-${String(d.m).padStart(2, '0')}-${String(d.d).padStart(2, '0')}` : undefined;
+  }
+  const s = String(v).trim();
+  const m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);
+  if (m) {
+    const [, dd, mm, yy] = m;
+    const year = yy.length === 2 ? `20${yy}` : yy;
+    return `${year}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`;
+  }
+  const dt = new Date(s);
+  return Number.isNaN(dt.getTime()) ? undefined : dt.toISOString().slice(0, 10);
 }
-function mapHeader(header:string){
+
+function mapHeader(header: unknown): keyof ImportedStudent | undefined {
   const h = norm(header);
-  return Object.entries(aliases).find(([, arr]) => arr.some(a => h.includes(norm(a))))?.[0];
+  if (!h) return undefined;
+  for (const [key, arr] of Object.entries(aliases)) {
+    if (arr.some(a => h.includes(norm(a)))) return key as keyof ImportedStudent;
+  }
+  return undefined;
 }
-export async function importStudentsFromExcel(file: File, classId: string) {
+
+type AddressMap = { provinces: Map<string, string>; districts: Map<string, string>; communes: Map<string, string>; villages: Map<string, string> };
+
+async function loadAddressMaps(): Promise<AddressMap> {
+  const [p, d, c, v] = await Promise.all([
+    supabase.from('provinces').select('id, name_km'),
+    supabase.from('districts').select('id, name_km, province_id'),
+    supabase.from('communes').select('id, name_km, district_id'),
+    supabase.from('villages').select('id, name_km, commune_id')
+  ]);
+  const toMap = (rows: { id: string; name_km: string }[] | null) => {
+    const m = new Map<string, string>();
+    (rows || []).forEach(r => m.set(r.name_km.trim(), r.id));
+    return m;
+  };
+  return {
+    provinces: toMap(p.data),
+    districts: toMap(d.data),
+    communes: toMap(c.data),
+    villages: toMap(v.data)
+  };
+}
+
+export interface ImportResult {
+  total: number;
+  inserted: number;
+  errors: string[];
+}
+
+export async function importStudentsFromExcel(file: File, classId: string): Promise<ImportResult> {
   const buf = await file.arrayBuffer();
-  const wb = XLSX.read(buf, { type:'array', cellDates:true });
+  const wb = XLSX.read(buf, { type: 'array', cellDates: true });
   const ws = wb.Sheets[wb.SheetNames[0]];
-  const rows:any[][] = XLSX.utils.sheet_to_json(ws, { header:1, defval:'' });
+  const rows: unknown[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+
   const headerIndex = rows.findIndex(r => r.some(c => mapHeader(c)));
-  if (headerIndex < 0) throw new Error('រកមិនឃើញជួរចំណងជើងក្នុង Excel');
+  if (headerIndex < 0) throw new Error('រកមិនឃើញជួរចំណងជើងក្នុង Excel។ សូមធានាថាមានជួរឈ្មោះ ឬ Student Name');
+
   const headers = rows[headerIndex];
   const mapped = headers.map(mapHeader);
-  const students: ImportedStudent[] = rows.slice(headerIndex+1).map(r => {
-    const s:any = { class_id: classId };
-    mapped.forEach((key, i) => { if (!key) return; s[key] = r[i]; });
+
+  const errors: string[] = [];
+  const addr = await loadAddressMaps();
+
+  const records = rows.slice(headerIndex + 1).map((r, idx) => {
+    const o: Partial<ImportedStudent> = {};
+    mapped.forEach((key, i) => { if (key) (o as any)[key] = r[i]; });
+    return { line: headerIndex + idx + 2, raw: o };
+  }).filter(x => String(x.raw.student_name ?? '').trim().length > 0);
+
+  const payload = records.map(({ line, raw }) => {
+    const g = String(raw.gender ?? '').trim();
+    const gender = g === 'ស្រី' || /female|^f$/i.test(g) ? 'ស្រី'
+      : g === 'ប្រុស' || /male|^m$/i.test(g) ? 'ប្រុស' : null;
+
+    const province_id = raw.province_name ? addr.provinces.get(String(raw.province_name).trim()) || null : null;
+    const district_id = raw.district_name ? addr.districts.get(String(raw.district_name).trim()) || null : null;
+    const commune_id  = raw.commune_name  ? addr.communes.get(String(raw.commune_name).trim())  || null : null;
+    const village_id  = raw.village_name  ? addr.villages.get(String(raw.village_name).trim())  || null : null;
+
+    if (raw.province_name && !province_id) errors.push(`បន្ទាត់ ${line}: រកមិនឃើញខេត្ត "${raw.province_name}"`);
+    if (raw.district_name && !district_id) errors.push(`បន្ទាត់ ${line}: រកមិនឃើញស្រុក "${raw.district_name}"`);
+
     return {
-      no: Number(s.no) || undefined,
-      student_name: String(s.student_name || '').trim(),
-      gender: s.gender === 'ស្រី' ? 'ស្រី' : s.gender === 'ប្រុស' ? 'ប្រុស' : undefined,
-      date_of_birth: excelDate(s.date_of_birth),
-      id_card_number: s.id_card_number ? String(s.id_card_number) : undefined,
-      address: s.address ? String(s.address) : undefined,
-      real_status: s.real_status ? String(s.real_status) : undefined,
-      id_card_result: s.id_card_result ? String(s.id_card_result) : undefined,
-      voter_result: s.voter_result ? String(s.voter_result) : undefined,
-      final_registration_date: excelDate(s.final_registration_date)
+      class_id: classId,
+      no: Number(raw.no) || null,
+      student_name: String(raw.student_name).trim(),
+      gender,
+      date_of_birth: excelDate(raw.date_of_birth) || null,
+      id_card_number: raw.id_card_number ? String(raw.id_card_number).trim() : null,
+      phone: raw.phone ? String(raw.phone).trim() : null,
+      address: raw.address ? String(raw.address).trim() : null,
+      province_id,
+      district_id,
+      commune_id,
+      village_id,
+      real_status: raw.real_status ? String(raw.real_status).trim() : null,
+      id_card_result: raw.id_card_result ? String(raw.id_card_result).trim() : undefined,
+      voter_result: raw.voter_result ? String(raw.voter_result).trim() : undefined,
+      final_registration_date: excelDate(raw.final_registration_date) || null
     };
-  }).filter(s => s.student_name);
-  const payload = students.map(s => ({ ...s, class_id: classId }));
-  const { error } = await supabase.from('students').upsert(payload, { onConflict:'class_id,student_name' });
-  if (error) throw error;
-  return payload.length;
+  });
+
+  if (payload.length === 0) return { total: 0, inserted: 0, errors: ['Excel គ្មានទិន្នន័យសិស្ស'] };
+
+  const chunkSize = 500;
+  let inserted = 0;
+  for (let i = 0; i < payload.length; i += chunkSize) {
+    const chunk = payload.slice(i, i + chunkSize);
+    const { error, count } = await supabase
+      .from('students')
+      .upsert(chunk, { onConflict: 'class_id,student_name', count: 'exact' });
+    if (error) {
+      errors.push(`Batch ${i / chunkSize + 1}: ${error.message}`);
+    } else {
+      inserted += count ?? chunk.length;
+    }
+  }
+
+  return { total: payload.length, inserted, errors };
 }
