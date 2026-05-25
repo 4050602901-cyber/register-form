@@ -81,7 +81,8 @@ alter table public.students add column if not exists commune_id              tex
 alter table public.students add column if not exists village_id              text references public.villages(id);
 alter table public.students add column if not exists real_status             text;
 alter table public.students add column if not exists id_card_result          text default 'មិនទាន់បានធ្វើ';
-alter table public.students add column if not exists voter_result            text default 'មិនទាន់បានចុះឈ្មោះ';
+alter table public.students add column if not exists voter_result            text default 'មិនទាន់បានចុះឈ្មោះបោះឆ្នោត';
+alter table public.students alter column voter_result set default 'មិនទាន់បានចុះឈ្មោះបោះឆ្នោត';
 alter table public.students add column if not exists final_registration_date date;
 alter table public.students add column if not exists updated_by_student      boolean default false;
 alter table public.students add column if not exists updated_at              timestamptz default now();

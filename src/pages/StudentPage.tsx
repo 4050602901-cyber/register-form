@@ -2,9 +2,10 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Search, CheckCircle, Loader2, GraduationCap, ChevronLeft } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { fetchAll } from '../lib/fetchAll';
+import { calculateAge } from '../lib/utils';
 import {
   StudentRow, ModuleType,
-  ID_CARD_RESULTS, VOTER_RESULTS, GENDERS
+  ID_CARD_RESULTS, VOTER_RESULTS, VOTER_MIN_AGE, GENDERS
 } from '../types';
 import AddressSelect from '../components/AddressSelect';
 
@@ -65,12 +66,21 @@ export default function StudentPage() {
     }).catch(() => setLoading(false));
   }, [classroom]);
 
+  // Voter module only lists students aged 18+
+  const ageFiltered = useMemo(() => {
+    if (module !== 'voter') return students;
+    return students.filter(s => {
+      const age = calculateAge(s.dob);
+      return age !== null && age >= VOTER_MIN_AGE;
+    });
+  }, [students, module]);
+
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
-    if (!term) return students.slice(0, 60);
-    return students.filter(s => s.name.toLowerCase().includes(term) ||
+    if (!term) return ageFiltered.slice(0, 60);
+    return ageFiltered.filter(s => s.name.toLowerCase().includes(term) ||
       (s.student_code || '').toLowerCase().includes(term)).slice(0, 60);
-  }, [students, q]);
+  }, [ageFiltered, q]);
 
   const setField = <K extends keyof StudentRow>(k: K, v: StudentRow[K]) => {
     if (selected) setSelected({ ...selected, [k]: v });
@@ -164,11 +174,21 @@ export default function StudentPage() {
                   </div>
                 </div>
 
+                {module === 'voter' && (
+                  <p className="text-xs text-amber-700 bg-amber-50 px-3 py-2 rounded-lg">
+                    បង្ហាញតែសិស្សដែលមានអាយុ {VOTER_MIN_AGE} ឆ្នាំឡើងតែប៉ុណ្ណោះ
+                  </p>
+                )}
+
                 <div className="space-y-2 max-h-[55vh] overflow-y-auto -mx-1 px-1">
                   {loading ? (
                     <div className="grid place-items-center py-10"><Loader2 className="animate-spin text-blue-600" /></div>
                   ) : filtered.length === 0 ? (
-                    <p className="text-center text-slate-400 py-8">{q ? 'រកមិនឃើញ' : 'គ្មានសិស្ស'}</p>
+                    <p className="text-center text-slate-400 py-8">
+                      {q ? 'រកមិនឃើញ' : module === 'voter'
+                        ? `គ្មានសិស្ស ${VOTER_MIN_AGE} ឆ្នាំឡើងក្នុងថ្នាក់នេះ`
+                        : 'គ្មានសិស្ស'}
+                    </p>
                   ) : filtered.map(s => (
                     <button
                       key={s.id}

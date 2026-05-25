@@ -7,12 +7,12 @@ import {
 import { supabase } from '../lib/supabase';
 import { exportStudentsExcel, exportTemplate } from '../lib/excelExport';
 import { importStudentsFromExcel } from '../lib/excelImport';
-import { ageText } from '../lib/utils';
+import { ageText, calculateAge } from '../lib/utils';
 import { fetchAll } from '../lib/fetchAll';
 import { shortAddress } from '../lib/address';
 import {
   StudentRow, ModuleType,
-  ID_CARD_RESULTS, VOTER_RESULTS, GENDERS
+  ID_CARD_RESULTS, VOTER_RESULTS, VOTER_MIN_AGE, GENDERS
 } from '../types';
 import Login from '../components/Login';
 import StatCard from '../components/StatCard';
@@ -83,6 +83,10 @@ export default function AdminPage() {
   const visible = useMemo(() => students.filter(s => {
     if (classroom && s.classroom !== classroom) return false;
     if (gender && s.gender !== gender) return false;
+    if (module === 'voter') {
+      const age = calculateAge(s.dob);
+      if (age === null || age < VOTER_MIN_AGE) return false;
+    }
     if (result) {
       const r = module === 'id_card' ? s.id_card_result : s.voter_result;
       if (r !== result) return false;

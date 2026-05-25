@@ -57,9 +57,11 @@ export const ID_CARD_RESULTS = [
 ] as const;
 
 export const VOTER_RESULTS = [
-  'បានចុះឈ្មោះរួច',
-  'មិនទាន់បានចុះឈ្មោះ',
-  'មិនទាន់ដល់អាយុត្រូវចុះ'
+  'បានចុះឈ្មោះបោះឆ្នោត',
+  'មិនទាន់បានចុះឈ្មោះបោះឆ្នោត',
+  'មិនទាន់មានអត្តសញ្ញាណបណ្ណ'
 ] as const;
+
+export const VOTER_MIN_AGE = 18;
 
 export const GENDERS = ['ប្រុស', 'ស្រី'] as const;
