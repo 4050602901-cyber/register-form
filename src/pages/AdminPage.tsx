@@ -5,7 +5,7 @@ import {
   Pencil, X, FileSpreadsheet
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { exportStudentsExcel, exportTemplate } from '../lib/excelExport';
+import { exportTemplate } from '../lib/excelExport';
 import { importStudentsFromExcel } from '../lib/excelImport';
 import { ageText, calculateAge } from '../lib/utils';
 import { fetchAll } from '../lib/fetchAll';
@@ -18,6 +18,7 @@ import Login from '../components/Login';
 import StatCard from '../components/StatCard';
 import ClassroomList from '../components/ClassroomList';
 import AddressSelect from '../components/AddressSelect';
+import ExportPicker from '../components/ExportPicker';
 
 const PAGE_SIZE = 50;
 const STUDENT_SELECT = '*, provinces(*), districts(*), communes(*), villages(*)';
@@ -43,6 +44,7 @@ export default function AdminPage() {
 
   const [edit, setEdit] = useState<StudentRow | null>(null);
   const [saving, setSaving] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -225,8 +227,8 @@ export default function AdminPage() {
             </button>
             <button
               className="btn-primary hidden sm:inline-flex"
-              onClick={() => exportStudentsExcel(visible, module)}
-              disabled={!visible.length}
+              onClick={() => setExportOpen(true)}
+              disabled={!classrooms.length}
             >
               <Download size={18} /> Export
             </button>
@@ -252,10 +254,10 @@ export default function AdminPage() {
           </div>
           <button
             className="btn-primary w-full sm:hidden"
-            onClick={() => exportStudentsExcel(visible, module)}
-            disabled={!visible.length}
+            onClick={() => setExportOpen(true)}
+            disabled={!classrooms.length}
           >
-            <Download size={18} /> Export ({visible.length})
+            <Download size={18} /> Export
           </button>
         </div>
 
@@ -358,6 +360,16 @@ export default function AdminPage() {
           onClose={() => setEdit(null)}
           onChange={setEdit}
           onSave={saveEdit}
+        />
+      )}
+
+      {exportOpen && (
+        <ExportPicker
+          module={module}
+          classrooms={classrooms}
+          students={students}
+          initialClassroom={classroom || undefined}
+          onClose={() => setExportOpen(false)}
         />
       )}
     </div>
