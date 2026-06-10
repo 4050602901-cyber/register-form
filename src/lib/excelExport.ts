@@ -8,6 +8,17 @@ import { calculateAge } from './utils';
 // ID-card eligibility starts at 15 (រដ្ឋប្បវេណីខ្មែរ)
 const ID_CARD_MIN_AGE = 15;
 
+// Grade 12 classes are taken in full regardless of age; all other grades
+// keep the 18+ voter age condition.
+const isGrade12 = (classroom?: string | null): boolean =>
+  !!classroom && classroom.trim().startsWith('12');
+
+function isVoterEligible(s: StudentRow): boolean {
+  if (isGrade12(s.classroom)) return true;
+  const a = calculateAge(s.dob);
+  return a !== null && a >= VOTER_MIN_AGE;
+}
+
 const KHMER_MONTHS = [
   'មករា', 'កុម្ភៈ', 'មិនា', 'មេសា', 'ឧសភា', 'មិថុនា',
   'កក្កដា', 'សីហា', 'កញ្ញា', 'តុលា', 'វិច្ឆិកា', 'ធ្នូ'
@@ -17,14 +28,10 @@ function fmtDateShort(d: Date | string | null | undefined): string {
   if (!d) return '';
   const dt = typeof d === 'string' ? new Date(d) : d;
   if (Number.isNaN(dt.getTime())) return '';
-  return `${dt.getMonth() + 1}/${dt.getDate()}/${String(dt.getFullYear()).slice(-2)}`;
-}
-
-function fmtDateFull(d: Date | string | null | undefined): string {
-  if (!d) return '';
-  const dt = typeof d === 'string' ? new Date(d) : d;
-  if (Number.isNaN(dt.getTime())) return '';
-  return `${dt.getDate()}/${String(dt.getMonth() + 1).padStart(2, '0')}/${dt.getFullYear()}`;
+  const dd = String(dt.getDate()).padStart(2, '0');
+  const mm = String(dt.getMonth() + 1).padStart(2, '0');
+  const yy = String(dt.getFullYear()).slice(-2);
+  return `${dd}/${mm}/${yy}`;
 }
 
 function ageYM(dob?: string | null): string {
@@ -79,12 +86,9 @@ function voterClassSheet(students: StudentRow[], classroom: string): XLSX.WorkSh
     'លទ្ធផល'
   ];
 
-  const eligible = students.filter(s => {
-    const a = calculateAge(s.dob);
-    return a !== null && a >= VOTER_MIN_AGE;
-  });
+  const eligible = students.filter(isVoterEligible);
 
-  const defaultRegDate = fmtDateFull(new Date());
+  const defaultRegDate = fmtDateShort(new Date());
 
   const data: (string | number)[][] = [[title], headers];
   eligible.forEach((s, i) => {
@@ -94,7 +98,7 @@ function voterClassSheet(students: StudentRow[], classroom: string): XLSX.WorkSh
       s.gender || '',
       s.id_card_number || '',
       fmtDateShort(s.dob),
-      s.final_registration_date ? fmtDateFull(s.final_registration_date) : defaultRegDate,
+      s.final_registration_date ? fmtDateShort(s.final_registration_date) : defaultRegDate,
       ageYM(s.dob),
       shortAddr(s),
       s.voter_result || ''
@@ -200,10 +204,7 @@ function totalVoter(students: StudentRow[], classrooms: string[]): XLSX.WorkShee
   let tTot = 0, tFem = 0, tReg = 0, tNotReg = 0, tNoId = 0;
   classrooms.forEach((c, i) => {
     const list = students.filter(s => s.classroom === c);
-    const eligible = list.filter(s => {
-      const a = calculateAge(s.dob);
-      return a !== null && a >= VOTER_MIN_AGE;
-    });
+    const eligible = list.filter(isVoterEligible);
     const female  = list.filter(s => s.gender === 'ស្រី').length;
     const reg     = eligible.filter(s => s.voter_result === VOTER_RESULTS[0]).length;
     const notReg  = eligible.filter(s => s.voter_result === VOTER_RESULTS[1]).length;
