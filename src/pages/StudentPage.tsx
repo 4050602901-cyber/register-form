@@ -117,7 +117,15 @@ export default function StudentPage() {
     setMsg(error
       ? { type: 'err', text: error.message }
       : { type: 'ok', text: 'បានរក្សាទុកទិន្នន័យដោយជោគជ័យ' });
-    if (!error) window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (!error) {
+      // Sync the local list so the shared fields (name, gender, dob, id card
+      // number, phone, address) show up pre-filled when this student is
+      // re-opened from the other module (id_card <-> voter).
+      const saved: StudentRow = { ...selected, updated_by_student: true };
+      setSelected(saved);
+      setStudents(prev => prev.map(s => (s.id === saved.id ? saved : s)));
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   }
 
   // Selection step
