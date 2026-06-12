@@ -166,6 +166,7 @@ export default function AdminPage() {
             <p className="text-xs text-slate-500 hidden sm:block">បញ្ចូល • តាមដាន • របាយការណ៍</p>
           </div>
           <div className="flex items-center gap-2">
+            <a href="/pending" className="btn-soft text-sm">មិនទាន់បំពេញ</a>
             <a href="/student" target="_blank" rel="noreferrer" className="btn-soft text-sm hidden sm:inline-flex">បើកទម្រង់</a>
             <button className="btn-ghost text-slate-600" onClick={() => supabase.auth.signOut()} aria-label="ចាកចេញ">
               <LogOut size={18} />

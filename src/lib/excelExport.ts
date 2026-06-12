@@ -334,6 +334,52 @@ export function exportStudentsExcel(
   XLSX.writeFile(wb, `${prefix}_${today}.xlsx`);
 }
 
+// Workbook for the "not yet filled in" tracking page: a per-class summary
+// sheet plus the name list of students who have not submitted the form.
+export function exportPendingExcel(students: StudentRow[], classrooms: string[]): void {
+  const t = dateKh(new Date());
+  const wb = XLSX.utils.book_new();
+
+  const sum: (string | number)[][] = [
+    [`តារាងសង្ខេបសិស្សដែលមិនទាន់បានបំពេញទិន្នន័យ\n(គិតត្រឹមថ្ងៃទី${t.d} ខែ${t.m} ឆ្នាំ${t.y})`],
+    ['ល.រ', 'ថ្នាក់', 'សិស្សសរុប', 'បានបំពេញ', 'មិនទាន់បំពេញ', '% បានបំពេញ']
+  ];
+  let tTot = 0, tDone = 0;
+  classrooms.forEach((c, i) => {
+    const list = students.filter(s => s.classroom === c);
+    const done = list.filter(s => s.updated_by_student).length;
+    tTot += list.length; tDone += done;
+    sum.push([i + 1, c, list.length, done, list.length - done, pctStr(done, list.length)]);
+  });
+  sum.push(['សរុបរួម', '', tTot, tDone, tTot - tDone, pctStr(tDone, tTot)]);
+  const wsSum = XLSX.utils.aoa_to_sheet(sum);
+  wsSum['!merges'] = [{ s: { c: 0, r: 0 }, e: { c: 5, r: 0 } }];
+  setColWidths(wsSum, [6, 14, 12, 12, 14, 12]);
+  wsSum['!rows'] = [{ hpt: 40 }];
+  XLSX.utils.book_append_sheet(wb, wsSum, 'សង្ខេប');
+
+  const rows: (string | number)[][] = [
+    [`បញ្ជីឈ្មោះសិស្សដែលមិនទាន់បានបំពេញទិន្នន័យ (គិតត្រឹមថ្ងៃទី${t.d} ខែ${t.m} ឆ្នាំ${t.y})`],
+    ['ល.រ', 'លេខកូដ', 'គោត្តនាម-នាម', 'ភេទ', 'ថ្នាក់']
+  ];
+  let i = 0;
+  for (const c of classrooms) {
+    const pending = students
+      .filter(s => s.classroom === c && !s.updated_by_student)
+      .sort((a, b) => a.name.localeCompare(b.name, 'km'));
+    for (const s of pending) {
+      rows.push([++i, s.student_code || '', s.name, s.gender || '', s.classroom || '']);
+    }
+  }
+  const wsList = XLSX.utils.aoa_to_sheet(rows);
+  wsList['!merges'] = [{ s: { c: 0, r: 0 }, e: { c: 4, r: 0 } }];
+  setColWidths(wsList, [6, 14, 28, 8, 12]);
+  XLSX.utils.book_append_sheet(wb, wsList, 'បញ្ជីឈ្មោះ');
+
+  const today = new Date().toISOString().slice(0, 10);
+  XLSX.writeFile(wb, `សិស្សមិនទាន់បំពេញទិន្នន័យ_${today}.xlsx`);
+}
+
 export function exportTemplate(): void {
   const wb = XLSX.utils.book_new();
   const headers = [
