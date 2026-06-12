@@ -29,6 +29,14 @@ function effectiveVoterResult(s: StudentRow, asOf: Date): string {
   return normalizeVoterResult(s.voter_result) || '';
 }
 
+// Same for the ID-card report: under 15 as of the reference date is
+// auto-filled as "not old enough to make one".
+function effectiveIdCardResult(s: StudentRow, asOf: Date): string {
+  const a = calculateAge(s.dob, asOf);
+  if (a !== null && a < ID_CARD_MIN_AGE) return ID_CARD_RESULTS[2];
+  return s.id_card_result || '';
+}
+
 const KHMER_MONTHS = [
   'មករា', 'កុម្ភៈ', 'មិនា', 'មេសា', 'ឧសភា', 'មិថុនា',
   'កក្កដា', 'សីហា', 'កញ្ញា', 'តុលា', 'វិច្ឆិកា', 'ធ្នូ'
@@ -165,7 +173,7 @@ function idCardClassSheet(students: StudentRow[], classroom: string, asOf: Date)
       age !== null ? age : '',
       realStatus,
       shortAddr(s),
-      s.id_card_result || ''
+      effectiveIdCardResult(s, asOf)
     ]);
   });
 
@@ -180,8 +188,8 @@ function idCardClassSheet(students: StudentRow[], classroom: string, asOf: Date)
     const a = calculateAge(s.dob, asOf);
     return a !== null && a < ID_CARD_MIN_AGE;
   }).length;
-  const done    = students.filter(s => s.id_card_result === ID_CARD_RESULTS[0]).length;
-  const notDone = students.filter(s => s.id_card_result === ID_CARD_RESULTS[1]).length;
+  const done    = students.filter(s => effectiveIdCardResult(s, asOf) === ID_CARD_RESULTS[0]).length;
+  const notDone = students.filter(s => effectiveIdCardResult(s, asOf) === ID_CARD_RESULTS[1]).length;
 
   data.push(['', '', 'បរិយាយ', '', '', 'លទ្ធផល', '', '']);
   data.push(['', '', '$1', 'ចំនួនយុវជនដែលត្រូវធ្វើអត្តញ្ញាណ\nប័ណ្ណសញ្ជាតិខ្មែរ', '', mustMake, '', '']);
@@ -262,9 +270,9 @@ function totalIdCard(students: StudentRow[], classrooms: string[], asOf: Date): 
   classrooms.forEach((c, i) => {
     const list   = students.filter(s => s.classroom === c);
     const female = list.filter(s => s.gender === 'ស្រី').length;
-    const done   = list.filter(s => s.id_card_result === ID_CARD_RESULTS[0]).length;
-    const notDone = list.filter(s => s.id_card_result === ID_CARD_RESULTS[1]).length;
-    const young  = list.filter(s => s.id_card_result === ID_CARD_RESULTS[2]).length;
+    const done   = list.filter(s => effectiveIdCardResult(s, asOf) === ID_CARD_RESULTS[0]).length;
+    const notDone = list.filter(s => effectiveIdCardResult(s, asOf) === ID_CARD_RESULTS[1]).length;
+    const young  = list.filter(s => effectiveIdCardResult(s, asOf) === ID_CARD_RESULTS[2]).length;
     tTot += list.length; tFem += female; tDone += done; tNotDone += notDone; tYoung += young;
 
     data.push([
