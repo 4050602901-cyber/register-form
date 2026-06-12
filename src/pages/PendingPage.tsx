@@ -7,26 +7,16 @@ import { supabase } from '../lib/supabase';
 import { fetchAll } from '../lib/fetchAll';
 import { exportPendingExcel } from '../lib/excelExport';
 import { pct } from '../lib/utils';
-import { StudentRow } from '../types';
-import Login from '../components/Login';
+import { StudentRow, hasResidence } from '../types';
 import StatCard from '../components/StatCard';
 
+// Public page (no login): "filled in" means residence data exists —
+// see hasResidence().
 export default function PendingPage() {
-  const [session, setSession] = useState<any>(null);
-  const [authLoading, setAuthLoading] = useState(true);
   const [students, setStudents] = useState<StudentRow[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [q, setQ] = useState('');
   const [open, setOpen] = useState<Set<string>>(new Set());
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setAuthLoading(false);
-    });
-    const { data: sub } = supabase.auth.onAuthStateChange((_, s) => setSession(s));
-    return () => sub.subscription.unsubscribe();
-  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -34,7 +24,7 @@ export default function PendingPage() {
       const rows = await fetchAll<StudentRow>(([from, to]) =>
         supabase
           .from('students')
-          .select('id, student_code, name, gender, classroom, updated_by_student')
+          .select('id, student_code, name, gender, classroom, province_id, address')
           .order('classroom', { ascending: true })
           .order('name', { ascending: true })
           .range(from, to)
@@ -47,7 +37,7 @@ export default function PendingPage() {
     }
   }, []);
 
-  useEffect(() => { if (session) load(); }, [session, load]);
+  useEffect(() => { load(); }, [load]);
 
   const classrooms = useMemo(() => {
     const set = new Set<string>();
@@ -57,7 +47,7 @@ export default function PendingPage() {
 
   const stats = useMemo(() => {
     const total = students.length;
-    const done = students.filter(s => s.updated_by_student).length;
+    const done = students.filter(hasResidence).length;
     return { total, done, pending: total - done };
   }, [students]);
 
@@ -67,8 +57,8 @@ export default function PendingPage() {
     const term = q.trim().toLowerCase();
     return classrooms.map(c => {
       const list = students.filter(s => s.classroom === c);
-      const done = list.filter(s => s.updated_by_student).length;
-      let pending = list.filter(s => !s.updated_by_student);
+      const done = list.filter(hasResidence).length;
+      let pending = list.filter(s => !hasResidence(s));
       if (term) {
         pending = pending.filter(s =>
           s.name.toLowerCase().includes(term) ||
@@ -84,11 +74,6 @@ export default function PendingPage() {
     setOpen(next);
   }
 
-  if (authLoading) {
-    return <div className="min-h-screen grid place-items-center"><Loader2 className="animate-spin text-blue-600" size={32} /></div>;
-  }
-  if (!session) return <Login />;
-
   return (
     <div className="min-h-screen pb-24">
       <header className="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-slate-200">
@@ -99,7 +84,7 @@ export default function PendingPage() {
             </a>
             <div className="min-w-0">
               <h1 className="text-lg sm:text-xl font-bold truncate">តាមដានសិស្សមិនទាន់បំពេញទិន្នន័យ</h1>
-              <p className="text-xs text-slate-500 hidden sm:block">ចុចលើថ្នាក់ ដើម្បីមើលឈ្មោះសិស្ស</p>
+              <p className="text-xs text-slate-500 hidden sm:block">គិតតាមទីលំនៅ • ចុចលើថ្នាក់ ដើម្បីមើលឈ្មោះសិស្ស</p>
             </div>
           </div>
           <button

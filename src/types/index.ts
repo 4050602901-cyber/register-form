@@ -77,6 +77,12 @@ export function normalizeVoterResult(value?: string | null): string | null {
   return LEGACY_VOTER_RESULT_MAP[value.trim()] ?? value;
 }
 
+// A student counts as "filled in" on the /pending tracking page when
+// residence data exists: a province was chosen or a street address typed.
+export function hasResidence(s: StudentRow): boolean {
+  return !!(s.province_id || (s.address && s.address.trim()));
+}
+
 export const VOTER_MIN_AGE = 18;
 
 export const GENDERS = ['ប្រុស', 'ស្រី'] as const;

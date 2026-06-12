@@ -2,7 +2,7 @@ import * as XLSX from 'xlsx';
 import {
   StudentRow, ModuleType,
   VOTER_RESULTS, ID_CARD_RESULTS, VOTER_MIN_AGE,
-  normalizeVoterResult
+  normalizeVoterResult, hasResidence
 } from '../types';
 import { calculateAge } from './utils';
 
@@ -335,7 +335,7 @@ export function exportStudentsExcel(
 }
 
 // Workbook for the "not yet filled in" tracking page: a per-class summary
-// sheet plus the name list of students who have not submitted the form.
+// sheet plus the name list of students without residence data.
 export function exportPendingExcel(students: StudentRow[], classrooms: string[]): void {
   const t = dateKh(new Date());
   const wb = XLSX.utils.book_new();
@@ -347,7 +347,7 @@ export function exportPendingExcel(students: StudentRow[], classrooms: string[])
   let tTot = 0, tDone = 0;
   classrooms.forEach((c, i) => {
     const list = students.filter(s => s.classroom === c);
-    const done = list.filter(s => s.updated_by_student).length;
+    const done = list.filter(hasResidence).length;
     tTot += list.length; tDone += done;
     sum.push([i + 1, c, list.length, done, list.length - done, pctStr(done, list.length)]);
   });
@@ -365,7 +365,7 @@ export function exportPendingExcel(students: StudentRow[], classrooms: string[])
   let i = 0;
   for (const c of classrooms) {
     const pending = students
-      .filter(s => s.classroom === c && !s.updated_by_student)
+      .filter(s => s.classroom === c && !hasResidence(s))
       .sort((a, b) => a.name.localeCompare(b.name, 'km'));
     for (const s of pending) {
       rows.push([++i, s.student_code || '', s.name, s.gender || '', s.classroom || '']);
