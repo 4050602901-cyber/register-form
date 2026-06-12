@@ -5,7 +5,8 @@ import { fetchAll } from '../lib/fetchAll';
 import { calculateAge } from '../lib/utils';
 import {
   StudentRow, ModuleType,
-  ID_CARD_RESULTS, VOTER_RESULTS, VOTER_MIN_AGE, GENDERS
+  ID_CARD_RESULTS, VOTER_RESULTS, VOTER_MIN_AGE, GENDERS,
+  normalizeVoterResult
 } from '../types';
 import AddressSelect from '../components/AddressSelect';
 
@@ -108,7 +109,7 @@ export default function StudentPage() {
     if (module === 'id_card') {
       update.id_card_result = selected.id_card_result;
     } else {
-      update.voter_result = selected.voter_result;
+      update.voter_result = normalizeVoterResult(selected.voter_result);
       update.final_registration_date = selected.final_registration_date;
     }
 
@@ -288,7 +289,7 @@ export default function StudentPage() {
             <label className="label">លទ្ធផល / ស្ថានភាព</label>
             <select
               className="input"
-              value={(module === 'id_card' ? selected.id_card_result : selected.voter_result) || ''}
+              value={(module === 'id_card' ? selected.id_card_result : normalizeVoterResult(selected.voter_result)) || ''}
               onChange={e => setField(module === 'id_card' ? 'id_card_result' : 'voter_result', e.target.value)}
             >
               {(module === 'id_card' ? ID_CARD_RESULTS : VOTER_RESULTS).map(x => <option key={x}>{x}</option>)}

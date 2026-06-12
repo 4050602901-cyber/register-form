@@ -12,7 +12,8 @@ import { fetchAll } from '../lib/fetchAll';
 import { shortAddress } from '../lib/address';
 import {
   StudentRow, ModuleType,
-  ID_CARD_RESULTS, VOTER_RESULTS, VOTER_MIN_AGE, GENDERS
+  ID_CARD_RESULTS, VOTER_RESULTS, VOTER_MIN_AGE, GENDERS,
+  normalizeVoterResult
 } from '../types';
 import Login from '../components/Login';
 import StatCard from '../components/StatCard';
@@ -90,7 +91,7 @@ export default function AdminPage() {
       if (age === null || age < VOTER_MIN_AGE) return false;
     }
     if (result) {
-      const r = module === 'id_card' ? s.id_card_result : s.voter_result;
+      const r = module === 'id_card' ? s.id_card_result : normalizeVoterResult(s.voter_result);
       if (r !== result) return false;
     }
     if (q) {
@@ -108,8 +109,9 @@ export default function AdminPage() {
   const stats = useMemo(() => {
     const total = visible.length;
     const female = visible.filter(s => s.gender === 'ស្រី').length;
-    const completed = visible.filter(s =>
-      (module === 'id_card' ? s.id_card_result : s.voter_result)?.includes('រួច')
+    const completed = visible.filter(s => module === 'id_card'
+      ? s.id_card_result === ID_CARD_RESULTS[0]
+      : normalizeVoterResult(s.voter_result) === VOTER_RESULTS[0]
     ).length;
     return { total, female, completed, pending: total - completed };
   }, [visible, module]);
@@ -135,6 +137,7 @@ export default function AdminPage() {
     if (!edit) return;
     setSaving(true);
     const { id, provinces: _p, districts: _d, communes: _cm, villages: _v, ...rest } = edit as any;
+    rest.voter_result = normalizeVoterResult(rest.voter_result);
     const { error } = await supabase.from('students').update(rest).eq('id', id);
     setSaving(false);
     if (error) { alert(error.message); return; }
@@ -282,8 +285,8 @@ export default function AdminPage() {
                 ) : pageRows.length === 0 ? (
                   <tr><td colSpan={9} className="td text-center py-10 text-slate-400">គ្មានទិន្នន័យ</td></tr>
                 ) : pageRows.map((s, i) => {
-                  const r = module === 'id_card' ? s.id_card_result : s.voter_result;
-                  const done = r?.includes('រួច');
+                  const r = module === 'id_card' ? s.id_card_result : normalizeVoterResult(s.voter_result);
+                  const done = r === (module === 'id_card' ? ID_CARD_RESULTS[0] : VOTER_RESULTS[0]);
                   return (
                     <tr key={s.id} className="hover:bg-slate-50">
                       <td className="td">{(page - 1) * PAGE_SIZE + i + 1}</td>
@@ -317,8 +320,8 @@ export default function AdminPage() {
           ) : pageRows.length === 0 ? (
             <div className="card p-6 text-center text-slate-400">គ្មានទិន្នន័យ</div>
           ) : pageRows.map((s, i) => {
-            const r = module === 'id_card' ? s.id_card_result : s.voter_result;
-            const done = r?.includes('រួច');
+            const r = module === 'id_card' ? s.id_card_result : normalizeVoterResult(s.voter_result);
+            const done = r === (module === 'id_card' ? ID_CARD_RESULTS[0] : VOTER_RESULTS[0]);
             return (
               <div key={s.id} className="card p-4">
                 <div className="flex items-start justify-between gap-2">
@@ -445,7 +448,7 @@ function EditModal({
               <label className="label">លទ្ធផល</label>
               <select
                 className="input"
-                value={(module === 'id_card' ? student.id_card_result : student.voter_result) || ''}
+                value={(module === 'id_card' ? student.id_card_result : normalizeVoterResult(student.voter_result)) || ''}
                 onChange={e => set(module === 'id_card' ? 'id_card_result' : 'voter_result', e.target.value)}
               >
                 {(module === 'id_card' ? ID_CARD_RESULTS : VOTER_RESULTS).map(x => <option key={x}>{x}</option>)}

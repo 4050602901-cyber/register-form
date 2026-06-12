@@ -62,6 +62,20 @@ export const VOTER_RESULTS = [
   'មិនទាន់មានអត្តសញ្ញាណបណ្ណ'
 ] as const;
 
+// Wording saved by older versions of the app (before VOTER_RESULTS was
+// renamed). Rows with these values still exist in the database, so every
+// display / filter / count must normalize through this map first.
+const LEGACY_VOTER_RESULT_MAP: Record<string, string> = {
+  'បានចុះឈ្មោះរួច': 'បានចុះឈ្មោះបោះឆ្នោត',
+  'មិនទាន់បានចុះឈ្មោះ': 'មិនទាន់បានចុះឈ្មោះបោះឆ្នោត',
+  'មិនទាន់ដល់អាយុត្រូវចុះ': 'មិនទាន់បានចុះឈ្មោះបោះឆ្នោត'
+};
+
+export function normalizeVoterResult(value?: string | null): string | null {
+  if (!value) return value ?? null;
+  return LEGACY_VOTER_RESULT_MAP[value.trim()] ?? value;
+}
+
 export const VOTER_MIN_AGE = 18;
 
 export const GENDERS = ['ប្រុស', 'ស្រី'] as const;

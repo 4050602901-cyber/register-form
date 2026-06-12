@@ -1,7 +1,8 @@
 import * as XLSX from 'xlsx';
 import {
   StudentRow, ModuleType,
-  VOTER_RESULTS, ID_CARD_RESULTS, VOTER_MIN_AGE
+  VOTER_RESULTS, ID_CARD_RESULTS, VOTER_MIN_AGE,
+  normalizeVoterResult
 } from '../types';
 import { calculateAge } from './utils';
 
@@ -101,7 +102,7 @@ function voterClassSheet(students: StudentRow[], classroom: string): XLSX.WorkSh
       s.final_registration_date ? fmtDateShort(s.final_registration_date) : defaultRegDate,
       ageYM(s.dob),
       shortAddr(s),
-      s.voter_result || ''
+      normalizeVoterResult(s.voter_result) || ''
     ]);
   });
 
@@ -111,9 +112,9 @@ function voterClassSheet(students: StudentRow[], classroom: string): XLSX.WorkSh
 
   // Summary block (matches template exactly)
   const eligibleTotal = eligible.length;
-  const registered    = eligible.filter(s => s.voter_result === VOTER_RESULTS[0]).length;
-  const notRegistered = eligible.filter(s => s.voter_result === VOTER_RESULTS[1]).length;
-  const noIdCard      = eligible.filter(s => s.voter_result === VOTER_RESULTS[2]).length;
+  const registered    = eligible.filter(s => normalizeVoterResult(s.voter_result) === VOTER_RESULTS[0]).length;
+  const notRegistered = eligible.filter(s => normalizeVoterResult(s.voter_result) === VOTER_RESULTS[1]).length;
+  const noIdCard      = eligible.filter(s => normalizeVoterResult(s.voter_result) === VOTER_RESULTS[2]).length;
 
   data.push(['', 'ចំនួនយុវជនដែលមានអាយុត្រូវចុះឈ្មោះបោះឆ្នោត', '', '', '', eligibleTotal, '%', '', '']);
   data.push(['', 'ចំនួនយុវជនដែលបានចុះឈ្មោះបោះឆ្នោតរួច', '', '', '', registered, pctStr(registered, eligibleTotal), '', '']);
@@ -198,7 +199,7 @@ function totalVoter(students: StudentRow[], classrooms: string[]): XLSX.WorkShee
   const data: (string | number)[][] = [
     [title],
     ['ល.រ', 'កម្រិតថ្នាក់', 'ចំនួនសិស្សសរុប', '', 'លទ្ធផលការចុះឈ្មោះបោះឆ្នោត (ចំនួនសិស្ស)', '', '', '', '', ''],
-    ['', '', 'សរុប', 'ស្រី', 'បានចុះរួច', '%', 'មិនទាន់\nបានចុះឈ្មោះ', '%', 'មិនទាន់ដល់\nអាយុត្រូវចុះ', '%']
+    ['', '', 'សរុប', 'ស្រី', 'បានចុះរួច', '%', 'មិនទាន់\nបានចុះឈ្មោះ', '%', 'មិនទាន់មាន\nអត្តសញ្ញាណបណ្ណ', '%']
   ];
 
   let tTot = 0, tFem = 0, tReg = 0, tNotReg = 0, tNoId = 0;
@@ -206,9 +207,9 @@ function totalVoter(students: StudentRow[], classrooms: string[]): XLSX.WorkShee
     const list = students.filter(s => s.classroom === c);
     const eligible = list.filter(isVoterEligible);
     const female  = list.filter(s => s.gender === 'ស្រី').length;
-    const reg     = eligible.filter(s => s.voter_result === VOTER_RESULTS[0]).length;
-    const notReg  = eligible.filter(s => s.voter_result === VOTER_RESULTS[1]).length;
-    const noId    = eligible.filter(s => s.voter_result === VOTER_RESULTS[2]).length;
+    const reg     = eligible.filter(s => normalizeVoterResult(s.voter_result) === VOTER_RESULTS[0]).length;
+    const notReg  = eligible.filter(s => normalizeVoterResult(s.voter_result) === VOTER_RESULTS[1]).length;
+    const noId    = eligible.filter(s => normalizeVoterResult(s.voter_result) === VOTER_RESULTS[2]).length;
     tTot += list.length; tFem += female; tReg += reg; tNotReg += notReg; tNoId += noId;
 
     data.push([

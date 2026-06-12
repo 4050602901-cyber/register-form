@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx';
 import { supabase } from './supabase';
+import { normalizeVoterResult } from '../types';
 
 type ImportedStudent = {
   student_code?: string;
@@ -175,7 +176,7 @@ export async function importStudentsFromExcel(file: File, classroom: string): Pr
       village_id,
       real_status: raw.real_status ? String(raw.real_status).trim() : null,
       id_card_result: raw.id_card_result ? String(raw.id_card_result).trim() : undefined,
-      voter_result: raw.voter_result ? String(raw.voter_result).trim() : undefined,
+      voter_result: raw.voter_result ? normalizeVoterResult(String(raw.voter_result).trim()) : undefined,
       final_registration_date: excelDate(raw.final_registration_date) || null,
       status: 'active'
     };
