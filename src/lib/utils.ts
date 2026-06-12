@@ -1,11 +1,13 @@
-export function calculateAge(dob?: string | null): number | null {
+// Age as of `asOf` (defaults to today). Reports pass a reference date such
+// as the final voter-registration deadline instead of the current date.
+export function calculateAge(dob?: string | null, asOf?: Date): number | null {
   if (!dob) return null;
   const birth = new Date(dob);
   if (Number.isNaN(birth.getTime())) return null;
-  const today = new Date();
-  let age = today.getFullYear() - birth.getFullYear();
-  const m = today.getMonth() - birth.getMonth();
-  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+  const ref = asOf ?? new Date();
+  let age = ref.getFullYear() - birth.getFullYear();
+  const m = ref.getMonth() - birth.getMonth();
+  if (m < 0 || (m === 0 && ref.getDate() < birth.getDate())) age--;
   return age;
 }
 

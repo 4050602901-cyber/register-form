@@ -24,6 +24,9 @@ export default function ExportPicker({
   );
   const [q, setQ] = useState('');
   const [busy, setBusy] = useState(false);
+  // Reference date for age calculation (e.g. the final voter-registration
+  // deadline). Defaults to today.
+  const [asOfStr, setAsOfStr] = useState(() => new Date().toISOString().slice(0, 10));
 
   useEffect(() => {
     setSelected(initialClassroom ? new Set([initialClassroom]) : new Set(classrooms));
@@ -54,13 +57,18 @@ export default function ExportPicker({
       alert('សូមជ្រើសថ្នាក់យ៉ាងហោចណាស់មួយ');
       return;
     }
+    const [y, m, d] = asOfStr.split('-').map(Number);
+    if (!y || !m || !d) {
+      alert('សូមបញ្ចូលកាលបរិច្ឆេទ «គិតត្រឹមថ្ងៃ»');
+      return;
+    }
     setBusy(true);
     try {
       const orderedClassrooms = classrooms.filter(c => selected.has(c));
       const filteredStudents = students.filter(s =>
         s.classroom != null && selected.has(s.classroom)
       );
-      exportStudentsExcel(filteredStudents, module, orderedClassrooms);
+      exportStudentsExcel(filteredStudents, module, orderedClassrooms, new Date(y, m - 1, d));
       onClose();
     } catch (e: any) {
       alert(`បរាជ័យ: ${e.message}`);
@@ -125,9 +133,18 @@ export default function ExportPicker({
           ))}
         </div>
 
-        <p className="text-xs text-slate-500 pt-3 border-t border-slate-100 mt-3">
-          ឯកសារនឹងមាន: <strong>Total</strong> sheet + មួយ sheet ក្នុងថ្នាក់នីមួយៗ
-        </p>
+        <div className="pt-3 border-t border-slate-100 mt-3">
+          <label className="label">គិតត្រឹមថ្ងៃ (សម្រាប់គណនាអាយុ)</label>
+          <input
+            type="date"
+            className="input"
+            value={asOfStr}
+            onChange={e => setAsOfStr(e.target.value)}
+          />
+          <p className="text-xs text-slate-500 mt-2">
+            ឯកសារនឹងមាន: <strong>Total</strong> sheet + មួយ sheet ក្នុងថ្នាក់នីមួយៗ
+          </p>
+        </div>
 
         <div className="flex gap-2 pt-3">
           <button type="button" className="btn-soft flex-1" onClick={onClose}>បោះបង់</button>

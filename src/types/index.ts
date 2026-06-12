@@ -59,7 +59,7 @@ export const ID_CARD_RESULTS = [
 export const VOTER_RESULTS = [
   'បានចុះឈ្មោះបោះឆ្នោត',
   'មិនទាន់បានចុះឈ្មោះបោះឆ្នោត',
-  'មិនទាន់មានអត្តសញ្ញាណបណ្ណ'
+  'មិនទាន់គ្រប់អាយុត្រូវចុះឈ្មោះ'
 ] as const;
 
 // Wording saved by older versions of the app (before VOTER_RESULTS was
@@ -68,7 +68,8 @@ export const VOTER_RESULTS = [
 const LEGACY_VOTER_RESULT_MAP: Record<string, string> = {
   'បានចុះឈ្មោះរួច': 'បានចុះឈ្មោះបោះឆ្នោត',
   'មិនទាន់បានចុះឈ្មោះ': 'មិនទាន់បានចុះឈ្មោះបោះឆ្នោត',
-  'មិនទាន់ដល់អាយុត្រូវចុះ': 'មិនទាន់បានចុះឈ្មោះបោះឆ្នោត'
+  'មិនទាន់ដល់អាយុត្រូវចុះ': 'មិនទាន់គ្រប់អាយុត្រូវចុះឈ្មោះ',
+  'មិនទាន់មានអត្តសញ្ញាណបណ្ណ': 'មិនទាន់បានចុះឈ្មោះបោះឆ្នោត'
 };
 
 export function normalizeVoterResult(value?: string | null): string | null {

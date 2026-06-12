@@ -14,10 +14,19 @@ const ID_CARD_MIN_AGE = 15;
 const isGrade12 = (classroom?: string | null): boolean =>
   !!classroom && classroom.trim().startsWith('12');
 
-function isVoterEligible(s: StudentRow): boolean {
+function isVoterEligible(s: StudentRow, asOf: Date): boolean {
   if (isGrade12(s.classroom)) return true;
-  const a = calculateAge(s.dob);
+  const a = calculateAge(s.dob, asOf);
   return a !== null && a >= VOTER_MIN_AGE;
+}
+
+// Result to print in the voter report: students still under 18 as of the
+// reference date are auto-filled as "not old enough to register",
+// whatever the stored value says.
+function effectiveVoterResult(s: StudentRow, asOf: Date): string {
+  const a = calculateAge(s.dob, asOf);
+  if (a !== null && a < VOTER_MIN_AGE) return VOTER_RESULTS[2];
+  return normalizeVoterResult(s.voter_result) || '';
 }
 
 const KHMER_MONTHS = [
@@ -35,14 +44,13 @@ function fmtDateShort(d: Date | string | null | undefined): string {
   return `${dd}/${mm}/${yy}`;
 }
 
-function ageYM(dob?: string | null): string {
+function ageYM(dob: string | null | undefined, asOf: Date): string {
   if (!dob) return '';
   const birth = new Date(dob);
   if (Number.isNaN(birth.getTime())) return '';
-  const today = new Date();
-  let years = today.getFullYear() - birth.getFullYear();
-  let months = today.getMonth() - birth.getMonth();
-  if (today.getDate() < birth.getDate()) months--;
+  let years = asOf.getFullYear() - birth.getFullYear();
+  let months = asOf.getMonth() - birth.getMonth();
+  if (asOf.getDate() < birth.getDate()) months--;
   if (months < 0) { years--; months += 12; }
   return `${years}ឆ្នាំ${months}ខែ`;
 }
@@ -59,8 +67,7 @@ function setColWidths(ws: XLSX.WorkSheet, widths: number[]) {
   ws['!cols'] = widths.map(w => ({ wch: w }));
 }
 
-function todayKh() {
-  const t = new Date();
+function dateKh(t: Date) {
   return { d: t.getDate(), m: KHMER_MONTHS[t.getMonth()], y: t.getFullYear() };
 }
 
@@ -73,8 +80,8 @@ const safeSheetName = (n: string) => n.replace(/[\\/?*:[\]]/g, ' ').slice(0, 31)
 // ─────────────────────────────────────────────────────────────────────────────
 // VOTER — per-class sheet (9 columns: A–I)
 // ─────────────────────────────────────────────────────────────────────────────
-function voterClassSheet(students: StudentRow[], classroom: string): XLSX.WorkSheet {
-  const t = todayKh();
+function voterClassSheet(students: StudentRow[], classroom: string, asOf: Date): XLSX.WorkSheet {
+  const t = dateKh(asOf);
   const title = `តារាងសម្រង់ទិន្នន័យលទ្ធផលសិស្សដែលត្រូវចុះឈ្មោះបោះឆ្នោត\nថ្នាក់ទី ${classroom}  គិតត្រឹមថ្ងៃទី${t.d}  ខែ${t.m}  ឆ្នាំ${t.y}`;
 
   const headers = [
@@ -87,9 +94,9 @@ function voterClassSheet(students: StudentRow[], classroom: string): XLSX.WorkSh
     'លទ្ធផល'
   ];
 
-  const eligible = students.filter(isVoterEligible);
+  const eligible = students.filter(s => isVoterEligible(s, asOf));
 
-  const defaultRegDate = fmtDateShort(new Date());
+  const defaultRegDate = fmtDateShort(asOf);
 
   const data: (string | number)[][] = [[title], headers];
   eligible.forEach((s, i) => {
@@ -100,9 +107,9 @@ function voterClassSheet(students: StudentRow[], classroom: string): XLSX.WorkSh
       s.id_card_number || '',
       fmtDateShort(s.dob),
       s.final_registration_date ? fmtDateShort(s.final_registration_date) : defaultRegDate,
-      ageYM(s.dob),
+      ageYM(s.dob, asOf),
       shortAddr(s),
-      normalizeVoterResult(s.voter_result) || ''
+      effectiveVoterResult(s, asOf)
     ]);
   });
 
@@ -112,15 +119,15 @@ function voterClassSheet(students: StudentRow[], classroom: string): XLSX.WorkSh
 
   // Summary block (matches template exactly)
   const eligibleTotal = eligible.length;
-  const registered    = eligible.filter(s => normalizeVoterResult(s.voter_result) === VOTER_RESULTS[0]).length;
-  const notRegistered = eligible.filter(s => normalizeVoterResult(s.voter_result) === VOTER_RESULTS[1]).length;
-  const noIdCard      = eligible.filter(s => normalizeVoterResult(s.voter_result) === VOTER_RESULTS[2]).length;
+  const registered    = eligible.filter(s => effectiveVoterResult(s, asOf) === VOTER_RESULTS[0]).length;
+  const notRegistered = eligible.filter(s => effectiveVoterResult(s, asOf) === VOTER_RESULTS[1]).length;
+  const underAge      = eligible.filter(s => effectiveVoterResult(s, asOf) === VOTER_RESULTS[2]).length;
 
   data.push(['', 'ចំនួនយុវជនដែលមានអាយុត្រូវចុះឈ្មោះបោះឆ្នោត', '', '', '', eligibleTotal, '%', '', '']);
   data.push(['', 'ចំនួនយុវជនដែលបានចុះឈ្មោះបោះឆ្នោតរួច', '', '', '', registered, pctStr(registered, eligibleTotal), '', '']);
   data.push([]);
   data.push(['', 'ចំនួនយុវជនដែលមិនទាន់បានចុះឈ្មោះបោះឆ្នោត', '', '', '', notRegistered, '', '', '']);
-  data.push(['', 'ចំនួនយុវជនដែលមិនទាន់មានអត្តសញ្ញាណបណ្ណ', '', '', '', noIdCard, '', '', '']);
+  data.push(['', 'ចំនួនយុវជនដែលមិនទាន់គ្រប់អាយុត្រូវចុះឈ្មោះ', '', '', '', underAge, '', '', '']);
 
   const ws = XLSX.utils.aoa_to_sheet(data);
   ws['!merges'] = [{ s: { c: 0, r: 0 }, e: { c: 8, r: 0 } }]; // title spans A–I
@@ -132,8 +139,8 @@ function voterClassSheet(students: StudentRow[], classroom: string): XLSX.WorkSh
 // ─────────────────────────────────────────────────────────────────────────────
 // ID CARD — per-class sheet (8 columns: A–H)
 // ─────────────────────────────────────────────────────────────────────────────
-function idCardClassSheet(students: StudentRow[], classroom: string): XLSX.WorkSheet {
-  const t = todayKh();
+function idCardClassSheet(students: StudentRow[], classroom: string, asOf: Date): XLSX.WorkSheet {
+  const t = dateKh(asOf);
   const title = `តារាងសម្រង់ទិន្នន័យលទ្ធផលសិស្សដែលបានធ្វើអត្តសញ្ញាណប័ណ្ណ\nថ្នាក់ទី ${classroom} គិតត្រឹមថ្ងៃទី${t.d} ខែ${t.m} ឆ្នាំ${t.y}`;
 
   const headers = [
@@ -147,7 +154,7 @@ function idCardClassSheet(students: StudentRow[], classroom: string): XLSX.WorkS
 
   const data: (string | number)[][] = [[title], headers];
   students.forEach((s, i) => {
-    const age = calculateAge(s.dob);
+    const age = calculateAge(s.dob, asOf);
     const realStatus = s.real_status
       ?? (age !== null && age >= ID_CARD_MIN_AGE ? 'ត្រូវធ្វើអត្តសញ្ញាណប័ណ្ណ' : '');
     data.push([
@@ -166,11 +173,11 @@ function idCardClassSheet(students: StudentRow[], classroom: string): XLSX.WorkS
   data.push([]);
 
   const mustMake = students.filter(s => {
-    const a = calculateAge(s.dob);
+    const a = calculateAge(s.dob, asOf);
     return a !== null && a >= ID_CARD_MIN_AGE;
   }).length;
   const tooYoung = students.filter(s => {
-    const a = calculateAge(s.dob);
+    const a = calculateAge(s.dob, asOf);
     return a !== null && a < ID_CARD_MIN_AGE;
   }).length;
   const done    = students.filter(s => s.id_card_result === ID_CARD_RESULTS[0]).length;
@@ -192,24 +199,24 @@ function idCardClassSheet(students: StudentRow[], classroom: string): XLSX.WorkS
 // ─────────────────────────────────────────────────────────────────────────────
 // VOTER — Total sheet
 // ─────────────────────────────────────────────────────────────────────────────
-function totalVoter(students: StudentRow[], classrooms: string[]): XLSX.WorkSheet {
-  const t = todayKh();
+function totalVoter(students: StudentRow[], classrooms: string[], asOf: Date): XLSX.WorkSheet {
+  const t = dateKh(asOf);
   const title = `តារាងលទ្ធផលយុវជនដែលបានចុះឈ្មោះបោះឆ្នោត តាមកម្រិតថ្នាក់\nសម្រាប់ឆ្នាំសិក្សា${t.y - 1}-${t.y}\n (គិតត្រឹមថ្ងៃទី${t.d} ខែ${t.m}  ឆ្នាំ${t.y})`;
 
   const data: (string | number)[][] = [
     [title],
     ['ល.រ', 'កម្រិតថ្នាក់', 'ចំនួនសិស្សសរុប', '', 'លទ្ធផលការចុះឈ្មោះបោះឆ្នោត (ចំនួនសិស្ស)', '', '', '', '', ''],
-    ['', '', 'សរុប', 'ស្រី', 'បានចុះរួច', '%', 'មិនទាន់\nបានចុះឈ្មោះ', '%', 'មិនទាន់មាន\nអត្តសញ្ញាណបណ្ណ', '%']
+    ['', '', 'សរុប', 'ស្រី', 'បានចុះរួច', '%', 'មិនទាន់\nបានចុះឈ្មោះ', '%', 'មិនទាន់គ្រប់អាយុ\nត្រូវចុះឈ្មោះ', '%']
   ];
 
   let tTot = 0, tFem = 0, tReg = 0, tNotReg = 0, tNoId = 0;
   classrooms.forEach((c, i) => {
     const list = students.filter(s => s.classroom === c);
-    const eligible = list.filter(isVoterEligible);
+    const eligible = list.filter(s => isVoterEligible(s, asOf));
     const female  = list.filter(s => s.gender === 'ស្រី').length;
-    const reg     = eligible.filter(s => normalizeVoterResult(s.voter_result) === VOTER_RESULTS[0]).length;
-    const notReg  = eligible.filter(s => normalizeVoterResult(s.voter_result) === VOTER_RESULTS[1]).length;
-    const noId    = eligible.filter(s => normalizeVoterResult(s.voter_result) === VOTER_RESULTS[2]).length;
+    const reg     = eligible.filter(s => effectiveVoterResult(s, asOf) === VOTER_RESULTS[0]).length;
+    const notReg  = eligible.filter(s => effectiveVoterResult(s, asOf) === VOTER_RESULTS[1]).length;
+    const noId    = eligible.filter(s => effectiveVoterResult(s, asOf) === VOTER_RESULTS[2]).length;
     tTot += list.length; tFem += female; tReg += reg; tNotReg += notReg; tNoId += noId;
 
     data.push([
@@ -241,8 +248,8 @@ function totalVoter(students: StudentRow[], classrooms: string[]): XLSX.WorkShee
 // ─────────────────────────────────────────────────────────────────────────────
 // ID CARD — Total sheet
 // ─────────────────────────────────────────────────────────────────────────────
-function totalIdCard(students: StudentRow[], classrooms: string[]): XLSX.WorkSheet {
-  const t = todayKh();
+function totalIdCard(students: StudentRow[], classrooms: string[], asOf: Date): XLSX.WorkSheet {
+  const t = dateKh(asOf);
   const title = `តារាងលទ្ធផលយុវជនដែលបានធ្វើអត្តសញ្ញាណប័ណ្ណសញ្ជាតិខ្មែរ តាមកម្រិតថ្នាក់\nសម្រាប់ឆ្នាំសិក្សា${t.y - 1}-${t.y}\n (គិតត្រឹមថ្ងៃទី${t.d}  ខែ${t.m}   ឆ្នាំ${t.y})`;
 
   const data: (string | number)[][] = [
@@ -292,22 +299,23 @@ function totalIdCard(students: StudentRow[], classrooms: string[]): XLSX.WorkShe
 export function exportStudentsExcel(
   students: StudentRow[],
   module: ModuleType,
-  classrooms: string[]
+  classrooms: string[],
+  asOf: Date = new Date()
 ): void {
   if (!classrooms.length) throw new Error('សូមជ្រើសថ្នាក់យ៉ាងហោចណាស់មួយ');
 
   const wb = XLSX.utils.book_new();
 
   const totalWs = module === 'voter'
-    ? totalVoter(students, classrooms)
-    : totalIdCard(students, classrooms);
+    ? totalVoter(students, classrooms, asOf)
+    : totalIdCard(students, classrooms, asOf);
   XLSX.utils.book_append_sheet(wb, totalWs, 'Total');
 
   for (const cls of classrooms) {
     const classStudents = students.filter(s => s.classroom === cls);
     const ws = module === 'voter'
-      ? voterClassSheet(classStudents, cls)
-      : idCardClassSheet(classStudents, cls);
+      ? voterClassSheet(classStudents, cls, asOf)
+      : idCardClassSheet(classStudents, cls, asOf);
     XLSX.utils.book_append_sheet(wb, ws, safeSheetName(`Grade ${cls}`));
   }
 
